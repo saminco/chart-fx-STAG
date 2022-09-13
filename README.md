@@ -6,7 +6,15 @@
 [![Language grade: Java](https://img.shields.io/lgtm/grade/java/g/fair-acc/chart-fx.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/fair-acc/chart-fx/context:java)
 [![Coverity Build Status](https://scan.coverity.com/projects/chart-fx/badge.svg)](https://scan.coverity.com/projects/chart-fx)
 
+# STAG
 
+To build STAG, developers will first need to add this repository to their local maven repo. This can be achieved by running the following maven configurations.
+
+```sh
+git clone -b main-stag-branch git@github.com:saminco/chart-fx-STAG.git
+cd chart-fx-STAG
+mvn clean package install
+```
 # ChartFx
 
 ChartFx is a scientific charting library developed at [GSI](https://www.gsi.de) for FAIR with focus on performance optimised real-time data visualisation at 25 Hz update rates for data sets with a few 10 thousand up to 5 million data points common in digital signal processing applications.

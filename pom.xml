@@ -2,13 +2,13 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>io.fair-acc</groupId>
-    <artifactId>chartfx-parent</artifactId>
+    <groupId>de.gsi</groupId>
+    <artifactId>chartfx</artifactId>
     <!-- N.B. convention: major version number is linked to the compatible JDK Version,
         minor version number to library feature/api changes, micro version number to bug-fixes -->
     <version>${revision}${sha1}${changelist}</version>
     <packaging>pom</packaging>
-    <name>chartfx-parent</name>
+    <name>chartfx</name>
     <description>The chart-fx charting library is an extension
         in the spirit of Oracle's XYChart and performance/time-proven JDataViewer charting functionalities.
         Emphasis was put on plotting performance for both large number of data points and real-time displays,
@@ -23,6 +23,7 @@
         <module>chartfx-chart</module>
         <module>chartfx-dataset</module>
         <module>chartfx-math</module>
+        <module>microservice</module>
         <module>chartfx-samples</module>
         <module>chartfx-report</module>
         <module>chartfx-generate</module>
@@ -33,12 +34,12 @@
         <changelist>-SNAPSHOT</changelist>
         <sha1 />
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.moduleName>io.fair-acc.chartfx-parent</project.moduleName>
+        <project.moduleName>de.gsi.chartfx</project.moduleName>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
 
         <chartfx.javafx.version>13.0.1</chartfx.javafx.version>
-        <chartfx.controlsfx.version>11.1.1</chartfx.controlsfx.version>
+        <chartfx.controlsfx.version>11.0.0</chartfx.controlsfx.version>
         <chartfx.ikonli.version>11.5.0</chartfx.ikonli.version>
         <chartfx.icu4j.version>65.1</chartfx.icu4j.version>
         <chartfx.javafxsvg.version>1.3.0</chartfx.javafxsvg.version>
@@ -65,7 +66,7 @@
         <name>GSI Helmholtzzentrum für Schwerionenforschung GmbH</name>
         <url>http://www.gsi.de</url>
     </organization>
-    <url>https://github.com/fair-acc/chart-fx</url>
+    <url>https://github.com/GSI-CS-CO/chart-fx</url>
 
     <developers>
         <developer>
@@ -173,7 +174,7 @@
                     <version>1.3.2</version>
                     <configuration>
                         <skip>true</skip>
-                        <mainClass>RunChartSamples</mainClass>
+                        <mainClass>de.gsi.chart.samples.RunChartSamples</mainClass>
                     </configuration>
                 </plugin>
                 <plugin> <!-- Use current plugin version because of MNG-5346-->
@@ -182,8 +183,8 @@
                     <version>3.6.0</version>
                 </plugin>
                 <plugin>
-                    <groupId>io.fair-acc</groupId>
-                    <artifactId>generate</artifactId>
+                    <groupId>de.gsi.generate</groupId>
+                    <artifactId>chartfx-generate</artifactId>
                     <version>${revision}${sha1}${changelist}</version>
                     <executions>
                         <execution>
@@ -407,7 +408,7 @@
                         <extensions>true</extensions>
                         <configuration>
                             <serverId>ossrh</serverId>
-                            <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                             <autoReleaseAfterClose>true</autoReleaseAfterClose>
                         </configuration>
                     </plugin>
@@ -416,7 +417,7 @@
             <distributionManagement>
                 <snapshotRepository>
                     <id>ossrh</id>
-                    <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
                 </snapshotRepository>
             </distributionManagement>
         </profile>

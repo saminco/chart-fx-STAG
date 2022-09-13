@@ -4,13 +4,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.fair-acc</groupId>
-        <artifactId>chartfx-parent</artifactId>
+        <groupId>de.gsi</groupId>
+        <artifactId>chartfx</artifactId>
         <version>${revision}${sha1}${changelist}</version>
         <relativePath>..</relativePath>
     </parent>
-    <artifactId>report</artifactId>
-    <name>chartfx-report</name>
+    <groupId>de.gsi.report</groupId>
+    <artifactId>chartfx-report</artifactId>
+    <name>report</name>
 
     <description>
         Container for handling testing and code coverage reports
@@ -18,23 +19,28 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.fair-acc</groupId>
-            <artifactId>dataset</artifactId>
+            <groupId>de.gsi.dataset</groupId>
+            <artifactId>chartfx-dataset</artifactId>
+            <version>11.2.7.stag</version>
+        </dependency>
+        <dependency>
+            <groupId>de.gsi.math</groupId>
+            <artifactId>chartfx-math</artifactId>
+            <version>11.2.7.stag</version>
+        </dependency>
+        <dependency>
+            <groupId>de.gsi.chart</groupId>
+            <artifactId>chartfx-chart</artifactId>
+            <version>11.2.7.stag</version>
+        </dependency>
+        <dependency>
+            <groupId>de.gsi.acc</groupId>
+            <artifactId>chartfx-acc</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.fair-acc</groupId>
-            <artifactId>math</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.fair-acc</groupId>
-            <artifactId>chartfx</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.fair-acc</groupId>
-            <artifactId>acc</artifactId>
+            <groupId>de.gsi</groupId>
+            <artifactId>microservice</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

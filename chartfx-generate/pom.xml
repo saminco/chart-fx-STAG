@@ -5,16 +5,17 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.fair-acc</groupId>
-        <artifactId>chartfx-parent</artifactId>
+        <groupId>de.gsi</groupId>
+        <artifactId>chartfx</artifactId>
         <version>${revision}${sha1}${changelist}</version>
         <relativePath>..</relativePath>
     </parent>
-    <artifactId>generate</artifactId>
-    <name>chartfx-generate</name>
+    <groupId>de.gsi.generate</groupId>
+    <artifactId>chartfx-generate</artifactId>
     <packaging>maven-plugin</packaging>
+    <name>chartfx-generate</name>
     <properties>
-        <project.moduleName>io.fair-acc.generate</project.moduleName>
+        <project.moduleName>de.gsi.chartfx.generate</project.moduleName>
     </properties>
 
 

@@ -9,14 +9,14 @@ For bugs, issues, or other discussion, please log a new issue in the GitHub repo
 GitHub supports [markdown](https://help.github.com/categories/writing-on-github/), so when filing bugs make sure you check the formatting before clicking submit.
 
 ## Other discussions
-For general "how-to" and guidance questions about using ChartFx to build and run applications, please have a look at the various [samples](https://github.com/fair-acc/chart-fx/tree/master/chartfx-samples/src/main/java/io/fair_acc) here or if you cannot find anything that fits your use-case use [Stack Overflow](http://stackoverflow.com/questions/tagged/chartfx-api) tagged with `ChartFx-api`.
+For general "how-to" and guidance questions about using ChartFx to build and run applications, please have a look at the various [samples](https://github.com/GSI-CS-CO/chart-fx/tree/master/chartfx-samples/src/main/java/de/gsi) here or if you cannot find anything that fits your use-case use [Stack Overflow](http://stackoverflow.com/questions/tagged/chartfx-api) tagged with `ChartFx-api`.
 
 ## Contributing code and content
 We welcome all forms of contributions from the community. Please read the following guidelines to maximise the chances of your PR being merged.
 
 ### Communication
  - Before starting work on a feature, check if there isn't already an examples in the 'samples' sub-module.
-   If not, then please open an issue on GitHub describing the proposed feature. We want to make sure any feature work goes smoothly.
+   If not, then please open an issue on GitHub describing the proposed feature. We want to make sure any feature work goes smoothly. 
    We're happy to work with you to determine if it fits the current project direction and make sure no one else is already working on it.
 
  - For any work related to setting up build, test, and CI for ChartFx on GitHub, or for small patches or bug fixes, please open an issue
@@ -26,15 +26,15 @@ We welcome all forms of contributions from the community. Please read the follow
 Please be sure to follow the usual process for submitting PRs:
 
  - Fork the repository
- - Make sure it compiles w/o errors against the current release 'main' branch::
-    - 'main' (active) code-compatibility level: JDK11, OpenJFX13, limited to Java 11 language features
-    - 'JDK8' (out of support) code-compatibility level: JDK8 This branch contains the last version working on JDK8 and will not receive any further updates.
- - Write and add a descriptive/meaningful JUnit test-case or [minimal working example](https://github.com/fair-acc/chart-fx/tree/master/chartfx-samples/src/main/java/io/fair_acc)
- - [TODO] apply default code formatter (to minimise future refactoring)
- - Please check against the current [PMD](https://pmd.github.io/) [default rules](https://github.com/fair-acc/chart-fx/blob/master/pmd_rules.xml), [FindBugs](http://findbugs.sourceforge.net/) or similar QA code checker (N.B. other/further code improvements are welcome)
- - Create a pull request
-   - Make sure your PR title is descriptive
-   - Include a link back to an open issue in the PR description
+ - Make sure it compiles w/o errors against the current release 'master' or legacy 'JDK8' branch::
+    - 'master' (active) code-compatibility level: JDK11, OpenJFX12, limited to Java 1.8 language features
+    - 'JDK8' (legacy) code-compatibility level: JDK8 (please, keep upward compatibility in mind)
+ - Write and add a descriptive/meaningful JUnit test-case or [minimal working example](https://github.com/GSI-CS-CO/chart-fx/tree/master/chartfx-samples/src/main/java/de/gsi)
+ - [TODO] apply default code formatter (to minimise future refactoring) 
+ - Please check against the current [PMD](https://pmd.github.io/) [default rules](https://github.com/GSI-CS-CO/chart-fx/blob/master/pmd_rules.xml), [FindBugs](http://findbugs.sourceforge.net/) or similar QA code checker (N.B. other/further code improvements are welcome)
+ - Create a pull request 
+ - Make sure your PR title is descriptive
+ - Include a link back to an open issue in the PR description
 
 We reserve the right to close PRs that are not making progress. Closed PRs can be reopened again later and work can resume.
 

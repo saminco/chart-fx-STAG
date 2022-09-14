@@ -13,7 +13,7 @@ To build STAG, developers will first need to add this repository to their local 
 ```sh
 git clone -b main-stag-branch https://github.com/saminco/chart-fx-STAG.git
 cd chart-fx-STAG
-mvn clean package install
+mvn clean package install -DskipTests
 ```
 
 # ChartFx

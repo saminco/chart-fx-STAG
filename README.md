@@ -11,7 +11,7 @@
 To build STAG, developers will first need to add this repository to their local maven repository. This can be achieved by running the following maven configurations.
 
 ```sh
-git clone -b main-stag-branch git@github.com:saminco/chart-fx-STAG.git
+git clone -b main-stag-branch https://github.com/saminco/chart-fx-STAG.git
 cd chart-fx-STAG
 mvn clean package install
 ```

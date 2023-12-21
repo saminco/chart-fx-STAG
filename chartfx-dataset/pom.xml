@@ -11,7 +11,7 @@
     <artifactId>dataset</artifactId>
     <name>chartfx-dataset</name>
     <properties>
-        <project.moduleName>io.fair-acc.dataset</project.moduleName>
+        <project.moduleName>io.fair_acc.dataset</project.moduleName>
     </properties>
 
     <description>
@@ -21,9 +21,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>it.unimi.dsi</groupId>
-            <artifactId>fastutil</artifactId>
-            <version>8.3.1</version>
+            <groupId>io.fair-acc</groupId>
+            <artifactId>bench</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <!-- micro-benchmarking framework -->
         <dependency>

@@ -14,6 +14,7 @@ import io.fair_acc.chartfx.axes.LogAxisType;
 import io.fair_acc.chartfx.axes.TickUnitSupplier;
 import io.fair_acc.chartfx.axes.spi.format.DefaultTickUnitSupplier;
 import io.fair_acc.chartfx.ui.css.CssPropertyFactory;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * A axis class that plots a range of numbers with major tick marks every "tickUnit". You can use any Number type with
@@ -461,25 +462,23 @@ public final class NumericAxis extends AbstractAxis {
     }
 
     @Override
-    protected List<Double> calculateMajorTickValues(final double axisLength, final AxisRange range) {
+    protected void calculateMajorTickValues(final AxisRange range, DoubleArrayList tickValues) {
         if (range.getLowerBound() == range.getUpperBound() || range.getTickUnit() <= 0) {
-            return Collections.singletonList(range.getLowerBound());
+            tickValues.add(range.getLowerBound());
+            return;
         }
-        final List<Double> tickValues = new ArrayList<>();
         final double firstTick = NumericAxis.computeFistMajorTick(range.getLowerBound(), range.getTickUnit());
         for (double major = firstTick; major <= range.getUpperBound(); major += range.getTickUnit()) {
             tickValues.add(major);
         }
-        return tickValues;
     }
 
     @Override
-    protected List<Double> calculateMinorTickValues() {
+    protected void calculateMinorTickValues(DoubleArrayList minorTickMarks) {
         if (getMinorTickCount() == 0 || getTickUnit() == 0) {
-            return Collections.emptyList();
+            return;
         }
 
-        final List<Double> minorTickMarks = new ArrayList<>();
         final double lowerBound = getMin();
         final double upperBound = getMax();
         final double majorUnit = getTickUnit();
@@ -495,7 +494,6 @@ public final class NumericAxis extends AbstractAxis {
                 }
             }
         }
-        return minorTickMarks;
     }
 
     @Override

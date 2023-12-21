@@ -1,22 +1,14 @@
 [![Join the chat at https://gitter.im/fair-acc/chart](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/fair-acc/chart?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![License](https://img.shields.io/badge/License-LGPL%203.0-blue.svg)](https://opensource.org/licenses/LGPL-3.0)
-[![Maven Central](https://img.shields.io/maven-central/v/io.fair_acc.chartfx/chart/11.svg)](https://search.maven.org/search?q=g:io.fair_acc.chartfx+AND+a:chart+AND+v:11*)
+[![Maven Central](https://img.shields.io/maven-central/v/io.fair_acc/chartfx/11.svg)](https://search.maven.org/search?q=g:io.fair-acc+a:chartfx+v:11*)
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/1cac6d33dc824411bb56f9c939d02121?branch=master)](https://www.codacy.com/app/GSI/chart-fx?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=fair-acc/chart-fx&amp;utm_campaign=Badge_Grade)
-[![Language grade: Java](https://img.shields.io/lgtm/grade/java/g/fair-acc/chart-fx.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/fair-acc/chart-fx/context:java)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=fair-acc_chart-fx&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=fair-acc_chart-fx)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=fair-acc_chart-fx&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=fair-acc_chart-fx)
 [![Coverity Build Status](https://scan.coverity.com/projects/chart-fx/badge.svg)](https://scan.coverity.com/projects/chart-fx)
 
-# STAG
-
-To build STAG, developers will first need to add this repository to their local maven repository. This can be achieved by running the following maven configurations.
-
-```sh
-git clone -b main-stag-branch https://github.com/saminco/chart-fx-STAG.git
-cd chart-fx-STAG
-mvn clean package install -DskipTests
-```
-
-# ChartFx
+<p align="center" width="100%">
+    <img t src="docs/banner/banner.svg" alt="ChartFx banner">
+</p>
 
 ChartFx is a scientific charting library developed at [GSI](https://www.gsi.de) for FAIR with focus on performance optimised real-time data visualisation at 25 Hz update rates for data sets with a few 10 thousand up to 5 million data points common in digital signal processing applications.
 Based on earlier Swing-based designs used at GSI and CERN, it is a re-write of JavaFX's default [Chart](https://docs.oracle.com/javase/8/javafx/api/javafx/scene/chart/Chart.html) implementation and aims to preserve the feature-rich and extensible functionality of earlier and other similar Swing-based libraries while addressing the performance bottlenecks and API issues.
@@ -30,19 +22,22 @@ The motivation for the re-design has been presented at [IPAC'19](https://ipac19.
 </figure>
 
 ## Functionalities and Features
+
 The library offers a wide variety of plot types common in the scientific signal processing field, a flexible plugin system as well as online parameter measurements commonly found in lab instrumentation. Some of its features include (see demos for more details):
-*   `DataSet`: basic XY-type datasets, extendable by `DataSetError` to account for measurement uncertainties, `DataSetMetaData`, `EditableDataSet`, `Histogram`, or `DataSet3D` interfaces;
-*   math sub-library: FFTs, Wavelet and other spectral and linear algebra routines, numerically robust integration and differentiation, IIR- & FIR-type filtering, linear regression and non-linear chi-square-type function fitting;
-*   `Chart`: providing euclidean, polar, or 2D projections of 3D data sets, and a configurable legend;
-*   `Axis`: one or multiple axes that are linear, logarithmic, time-series, inverted, dynamic auto-(grow)-ranging, automatic range-based SI and time unit conversion;
-*   `Renderer`: scatter-plot, poly-line, area-plot, error-bar and error-surfaces, vertical bar-plots, Bezier-curve, stair-case, 1D/2D histograms, mountain-range display, true contour plots, heatmaps, fading DataSet history, labelled chart range and indicator marker, hexagon-map, meta data (i.e. for indicating common measurement errors, warnings or infos such as over- or under-ranging, device or configuration errors etc.);
-*   `ChartPlugin`: data zoomer with history, zoom-to-origin, and option to limit this to X and/or Y coordinates, panner, data value and range indicators, cross-hair indicator, data point tool-tip, `DataSet` editing, table view, export to CSV and system clipboard, online axis editing, data set parameter measurement such as rise-time, min, max, rms, etc.
+
+- `DataSet`: basic XY-type datasets, extendable by `DataSetError` to account for measurement uncertainties, `DataSetMetaData`, `EditableDataSet`, `Histogram`, or `DataSet3D` interfaces;
+- math sub-library: FFTs, Wavelet and other spectral and linear algebra routines, numerically robust integration and differentiation, IIR- & FIR-type filtering, linear regression and non-linear chi-square-type function fitting;
+- `Chart`: providing Euclidean, polar, or 2D projections of 3D data sets, and a configurable legend;
+- `Axis`: one or multiple axes that are linear, logarithmic, time-series, inverted, dynamic auto-(grow)-ranging, automatic range-based SI and time unit conversion;
+- `Renderer`: scatter-plot, poly-line, area-plot, error-bar and error-surfaces, vertical bar-plots, Bezier-curve, staircase, 1D/2D histograms, mountain-range display, true contour plots, heatmaps, fading DataSet history, labelled chart range and indicator marker, hexagon-map, meta data (i.e. for indicating common measurement errors, warnings or infos such as over- or under-ranging, device or configuration errors etc.);
+- `ChartPlugin`: data zoomer with history, zoom-to-origin, and option to limit this to X and/or Y coordinates, panner, data value and range indicators, cross-hair indicator, data point tool-tip, `DataSet` editing, table view, export to CSV and system clipboard, online axis editing, data set parameter measurement such as rise-time, min, max, rms, etc.
 
 In order to provide some of the scenegraph-level functionality while using a `Canvas` as graphics backend, the functionality of each module was extended to be readily customized through direct API methods as well as through external CSS-type style sheets.
 
 ## Example Usage
 
 ### Add the library to your project
+
 All chart-fx releases are deployed to maven central, for maven you can add it to your pom.xml like this:
 
 ```Maven POM
@@ -58,18 +53,19 @@ All chart-fx releases are deployed to maven central, for maven you can add it to
 or your build.gradle like this:
 
 ```gradle
-implementation 'io.fair-acc:chartfx:11.3.0'
+implementation 'io.fair-acc:chartfx-chart:11.3.0'
 ```
 
-To use different build systems or library versions, have a look at the snippets on [maven central](https://search.maven.org/search?q=g:io.fair-acc%20AND%20a:chartfx&core=gav).
+To use different build systems or library versions, have a look at the snippets on [maven central](https://search.maven.org/search?q=io.fair-acc%20a:chartfx&core=gav).
 
-While most users will need the `chartfx-chart` artifact it is also possible to use the data containers from `chartfx-dataset`
-and the algorithms from `chartfx-math` independently without the quite heavy UI dependencies.
+While most users will need the `io.fair-acc:chartfx` artifact it is also possible to use the data containers from `io.fair-acc:dataset`
+and the algorithms from `io.fair-acc:math` independently without the quite heavy UI dependencies.
 
 #### Using the snapshot repository
 
-If you want to try out unreleased features from master or one of the feature branches, there is no need to download the source and build chart-fx yourself. You can just use the `<branchname>-SNAPSHOT` releases  from the sonatype snapshot repository for example by adding the following to your pom.xml if you want to use the current master.
-All available snapshot releases can be found in the [sonatype snapshot repository](https://oss.sonatype.org/content/repositories/snapshots/io/fair-acc/).
+If you want to try out unreleased features from master or one of the feature branches, there is no need to download the source and build chart-fx yourself. You can just use the `<branchname>-SNAPSHOT` releases from the sonatype snapshot repository for example by adding the following to your pom.xml if you want to use the current master.
+All available snapshot releases can be found in the [sonatype snapshot repository](https://s01.oss.sonatype.org/content/repositories/snapshots/io/fair-acc/).
+
 <details><summary>
 example pom.xml for current master (click to expand)
 </summary>
@@ -77,16 +73,16 @@ example pom.xml for current master (click to expand)
 ```xml
 <dependencies>
     <dependency>
-        <groupId>io.fair-acc</groupId>
+        <groupId>io.fair-acc.chartfx</groupId>
         <artifactId>chartfx</artifactId>
-        <version>master-SNAPSHOT</version>
-        <!-- <version>master-20200320.180638-78</version> pin to a specific snapshot build-->
+        <version>main-SNAPSHOT</version>
+        <!-- <version>main-20200320.180638-78</version> pin to a specific snapshot build-->
     </dependency>
 </dependencies>
 <repositories>
     <repository>
         <id>oss.sonatype.org-snapshot</id>
-        <url>http://oss.sonatype.org/content/repositories/snapshots</url>
+        <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
         <releases>
             <enabled>false</enabled>
         </releases>
@@ -96,6 +92,7 @@ example pom.xml for current master (click to expand)
     </repository>
 </repositories>
 ```
+
 </details>
 
 ### Code Example
@@ -144,16 +141,13 @@ public class SimpleChartSample extends Application {
         dataSet2.set(xValues, yValues2);
 
         final Scene scene = new Scene(root, 800, 600);
-        primaryStage.setTitle(this.getClass().getSimpleName());
-        primaryStage.setScene(scene);
-        primaryStage.setOnCloseRequest(evt -> System.exit(0));
-        primaryStage.show();
     }
     public static void main(final String[] args) {
         Application.launch(args);
     }
 }
 ```
+
 </details><details><summary>And the corresponding build specification(expand)</summary>
 pom.xml:
 
@@ -164,18 +158,19 @@ pom.xml:
 <name>chart-fx Sample</name>
 <dependencies>
   <dependency>
-    <groupId>io.fair_acc</groupId>
+    <groupId>io.fair-acc</groupId>
     <artifactId>chartfx</artifactId>
     <version>11.3.0</version>
   </dependency>
   <dependency>
     <groupId>org.slf4j</groupId>
     <artifactId>slf4j-simple</artifactId>
-    <version>2.0.0-alpha0</version>
+    <version>2.0.9</version>
   </dependency>
 </dependencies>
 </project>
 ```
+
 </details>
 <details><summary>run with (expand)</summary>
 
@@ -183,9 +178,11 @@ pom.xml:
 mvn compile install
 mvn exec:java
 ```
+
 </details>
 
 ## Examples
+
 The chart-fx samples submodule contains a lot of samples which illustrate the capabilities and usage of the library.
 If you want to try them yourself run:
 
@@ -197,57 +194,58 @@ mvn exec:java
 <table>
 
 <tr>
-<td><figure><img src="docs/pics/CategoryAxisSample.png" alt="CategoryAxisSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/CategoryAxisSample.java">CategoryAxisSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/MultipleAxesSample.png" alt="MultipleAxesSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/MultipleAxesSample.java">MultipleAxesSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/TimeAxisSample.png" alt="TimeAxisSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/TimeAxisSample.java">TimeAxisSample.java</a></figcaption></figure></td>                         
+<td><figure><img src="docs/pics/CategoryAxisSample.png" alt="CategoryAxisSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/CategoryAxisSample.java">CategoryAxisSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/MultipleAxesSample.png" alt="MultipleAxesSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/MultipleAxesSample.java">MultipleAxesSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/TimeAxisSample.png" alt="TimeAxisSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/TimeAxisSample.java">TimeAxisSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td><figure><img src="docs/pics/LogAxisSample.png" alt="LogAxisSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/LogAxisSample.java">LogAxisSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/HistogramSample.png" alt="HistogramSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/HistogramSample.java">HistogramSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/Histogram2DimSample.png" alt="Histogram2DimSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/Histogram2DimSample.java">Histogram2DimSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/LogAxisSample.png" alt="LogAxisSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/LogAxisSample.java">LogAxisSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/HistogramSample.png" alt="HistogramSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/HistogramSample.java">HistogramSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/Histogram2DimSample.png" alt="Histogram2DimSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/Histogram2DimSample.java">Histogram2DimSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td><figure><img src="docs/pics/EditDataSample.png" alt="EditDataSetSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/EditDataSetSample.java">EditDataSetSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/PolarPlotSample.png" alt="PolarPlotSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/PolarPlotSample.java">PolarPlotSample.java</a></figcaption></figure></td>                
-<td><figure><img src="docs/pics/MetaDataRendererSample2.png" alt="EditDataSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/MetaDataRendererSample.java">MetaDataRendererSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/EditDataSample.png" alt="EditDataSetSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/EditDataSetSample.java">EditDataSetSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/PolarPlotSample.png" alt="PolarPlotSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/PolarPlotSample.java">PolarPlotSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/MetaDataRendererSample2.png" alt="EditDataSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/MetaDataRendererSample.java">MetaDataRendererSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td><figure><img src="docs/pics/HistoryDataSetRendererSample.png" alt="HistoryDataSetRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/HistoryDataSetRendererSample.java">HistoryDataSetRendererSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/MountainRangeRendererSample.png" alt="MountainRangeRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/MountainRangeRendererSample.java">MountainRangeRendererSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/ChartAnatomySample.png" alt="ChartAnatomySample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ChartAnatomySample.java">ChartAnatomySample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/HistoryDataSetRendererSample.png" alt="HistoryDataSetRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/HistoryDataSetRendererSample.java">HistoryDataSetRendererSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/MountainRangeRendererSample.png" alt="MountainRangeRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/MountainRangeRendererSample.java">MountainRangeRendererSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/ChartAnatomySample.png" alt="ChartAnatomySample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ChartAnatomySample.java">ChartAnatomySample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td><figure><img src="docs/pics/ErrorDataSetRendererStylingSample1.png" alt="ErrorDataSetRendererStylingSample1" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ErrorDataSetRendererStylingSample.java">ErrorDataSetRendererStylingSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/ErrorDataSetRendererStylingSample2.png" alt="ErrorDataSetRendererStylingSample2" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ErrorDataSetRendererStylingSample.java">ErrorDataSetRendererStylingSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/LabelledMarkerSample.png" alt="LabelledMarkerSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/LabelledMarkerSample.java">LabelledMarkerSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/ErrorDataSetRendererStylingSample1.png" alt="ErrorDataSetRendererStylingSample1" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ErrorDataSetRendererStylingSample.java">ErrorDataSetRendererStylingSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/ErrorDataSetRendererStylingSample2.png" alt="ErrorDataSetRendererStylingSample2" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ErrorDataSetRendererStylingSample.java">ErrorDataSetRendererStylingSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/LabelledMarkerSample.png" alt="LabelledMarkerSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/LabelledMarkerSample.java">LabelledMarkerSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td colspan=2><figure><img src="docs/pics/ContourChartSample1.png" alt="ContourChartSample1" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ContourChartSample.java">ContourChartSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/ScatterAndBubbleRendererSample1.png" alt="ScatterAndBubbleRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ScatterAndBubbleRendererSample.java">ScatterAndBubbleRendererSample.java</a></figcaption></figure></td>
+<td colspan=2><figure><img src="docs/pics/ContourChartSample1.png" alt="ContourChartSample1" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ContourChartSample.java">ContourChartSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/ScatterAndBubbleRendererSample1.png" alt="ScatterAndBubbleRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ScatterAndBubbleRendererSample.java">ScatterAndBubbleRendererSample.java</a></figcaption></figure></td>
 </tr>
 <tr>
-<td colspan=2><figure><img src="docs/pics/ContourChartSample2.png" alt="ContourChartSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ContourChartSample.java">ContourChartSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/ScatterAndBubbleRendererSample2.png" alt="ScatterAndBubbleRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ScatterAndBubbleRendererSample.java">ScatterAndBubbleRendererSample.java</a></figcaption></figure></td>
+<td colspan=2><figure><img src="docs/pics/ContourChartSample2.png" alt="ContourChartSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ContourChartSample.java">ContourChartSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/ScatterAndBubbleRendererSample2.png" alt="ScatterAndBubbleRendererSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ScatterAndBubbleRendererSample.java">ScatterAndBubbleRendererSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td colspan=2><figure><img src="docs/pics/ChartIndicatorSample.png" alt="ChartIndicatorSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/chart/samples/ChartIndicatorSample.java">ChartIndicatorSample.java</a></figcaption></figure></td>         
+<td colspan=2><figure><img src="docs/pics/ChartIndicatorSample.png" alt="ChartIndicatorSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/chart/ChartIndicatorSample.java">ChartIndicatorSample.java</a></figcaption></figure></td>
 <td></td>
 </tr>
 
 <tr>
-<td colspan=2><figure><img src="docs/pics/HistogramRendererTests.png" alt="HistogramRendererTests" width=600/><figcaption><a href="chartfx-chart/src/test/java/io/fair_acc/chart/renderer/spi/HistogramRendererTests.java">HistogramRendererTests.java</a></figcaption></figure></td>         
+<td colspan=2><figure><img src="docs/pics/HistogramRendererTests.png" alt="HistogramRendererTests" width=600/><figcaption><a href="chartfx-chart/src/test/java/io/fair_acc/chartfx/renderer/spi/HistogramRendererTests.java">HistogramRendererTests.java</a></figcaption></figure></td>
 <td></td>
 </tr>
 
 </table>
 
 ### Financial related examples
+
 Financial charts are types of charts that visually track various business and financial metrics like liquidity, price movement, expenses, cash flow, and others over a given a period of the time. Financial charts are a great way to express a story about business or financial markets (instruments, financial assets).
 
 The chart-fx samples submodule contains financial charts and toolbox samples.
@@ -261,20 +259,21 @@ mvn exec:java
 
 <table>
 <tr>
-<td><figure><img src="docs/pics/FinancialCandlestickSample.png" alt="FinancialCandlestickSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/financial/samples/FinancialCandlestickSample.java">FinancialCandlestickSample.java (Several Themes Supported)</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/FinancialHiLowSample.png" alt="FinancialHiLowSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/financial/samples/FinancialHiLowSample.java">FinancialHiLowSample.java (OHLC Renderer)</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/FinancialCandlestickSample.png" alt="FinancialCandlestickSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/financial/FinancialCandlestickSample.java">FinancialCandlestickSample.java (Several Themes Supported)</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/FinancialHiLowSample.png" alt="FinancialHiLowSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/financial/FinancialHiLowSample.java">FinancialHiLowSample.java (OHLC Renderer)</a></figcaption></figure></td>
 </tr>
 <tr>
-<td><figure><img src="docs/pics/FinancialAdvancedCandlestickSample.png" alt="FinancialAdvancedCandlestickSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/financial/samples/FinancialAdvancedCandlestickSample.java">FinancialAdvancedCandlestickSample.java (Advanced PaintBars and Extension Points)</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/FinancialRealtimeCandlestickSample.png" alt="FinancialAdvancedCandlestickSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/financial/samples/FinancialRealtimeCandlestickSample.java">FinancialRealtimeCandlestickSample.java (OHLC Tick Replay Real-time processing)</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/FinancialAdvancedCandlestickSample.png" alt="FinancialAdvancedCandlestickSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/financial/FinancialAdvancedCandlestickSample.java">FinancialAdvancedCandlestickSample.java (Advanced PaintBars and Extension Points)</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/FinancialRealtimeCandlestickSample.png" alt="FinancialAdvancedCandlestickSample" width=600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/financial/FinancialRealtimeCandlestickSample.java">FinancialRealtimeCandlestickSample.java (OHLC Tick Replay Real-time processing)</a></figcaption></figure></td>
 </tr>
 </table>
 
 #### Financial Footprint Chart
 
-<figure><img src="docs/pics/FinancialRealtimeFootprintSample.png" alt="FinancialAdvancedCandlestickSample" width=1600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/financial/samples/FinancialRealtimeFootprintSample.java">FinancialRealtimeFootprintSample.java (FOOTPRINT Tick Replay Real-time processing)</a></figcaption></figure>
+<figure><img src="docs/pics/FinancialRealtimeFootprintSample.png" alt="FinancialAdvancedCandlestickSample" width=1600/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/financial/FinancialRealtimeFootprintSample.java">FinancialRealtimeFootprintSample.java (FOOTPRINT Tick Replay Real-time processing)</a></figcaption></figure>
 
 ### Math- & Signal-Processing related examples
+
 The math samples can be started by running:
 
 ```bash
@@ -284,25 +283,26 @@ mvn exec:java@math
 
 <table>
 <tr>
-<td><figure><img src="docs/pics/DataSetAverageSample.png" alt="DataSetAverageSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/DataSetAverageSample.java">DataSetAverageSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/DataSetFilterSample.png" alt="DataSetFilterSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/DataSetFilterSample.java">DataSetFilterSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/DataSetIntegrateDifferentiateSample.png" alt="DataSetIntegrateDifferentiateSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/DataSetIntegrateDifferentiateSample.java">DataSetIntegrateDifferentiateSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/DataSetAverageSample.png" alt="DataSetAverageSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/DataSetAverageSample.java">DataSetAverageSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/DataSetFilterSample.png" alt="DataSetFilterSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/DataSetFilterSample.java">DataSetFilterSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/DataSetIntegrateDifferentiateSample.png" alt="DataSetIntegrateDifferentiateSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/DataSetIntegrateDifferentiateSample.java">DataSetIntegrateDifferentiateSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td><figure><img src="docs/pics/DataSetSpectrumSample.png" alt="DataSetSpectrumSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/DataSetSpectrumSample.java">DataSetSpectrumSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/FourierSample.png" alt="FourierSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/FourierSample.java">FourierSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/FrequencyFilterSample.png" alt="FrequencyFilterSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/FrequencyFilterSample.java">FrequencyFilterSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/DataSetSpectrumSample.png" alt="DataSetSpectrumSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/DataSetSpectrumSample.java">DataSetSpectrumSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/FourierSample.png" alt="FourierSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/FourierSample.java">FourierSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/FrequencyFilterSample.png" alt="FrequencyFilterSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/FrequencyFilterSample.java">FrequencyFilterSample.java</a></figcaption></figure></td>
 </tr>
 
 <tr>
-<td><figure><img src="docs/pics/GaussianFitSample.png" alt="GaussianFitSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/GaussianFitSample.java">GaussianFitSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/IIRFilterSample.png" alt="IIRFilterSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/IIRFilterSample.java">IIRFilterSample.java</a></figcaption></figure></td>
-<td><figure><img src="docs/pics/WaveletScalogram.png" alt="WaveletScalogram" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/math/samples/WaveletScalogram.java">WaveletScalogram.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/GaussianFitSample.png" alt="GaussianFitSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/GaussianFitSample.java">GaussianFitSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/IIRFilterSample.png" alt="IIRFilterSample" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/IIRFilterSample.java">IIRFilterSample.java</a></figcaption></figure></td>
+<td><figure><img src="docs/pics/WaveletScalogram.png" alt="WaveletScalogram" width=300/><figcaption><a href="chartfx-samples/src/main/java/io/fair_acc/sample/math/WaveletScalogram.java">WaveletScalogram.java</a></figcaption></figure></td>
 </tr>
 </table>
 
 ### Other samples
+
 There are also samples for the dataset and the accelerator UI submodules which will be extended over time as new
 functionality is added.
 
@@ -313,6 +313,7 @@ mvn exec:java@acc-ui
 ```
 
 ## Performance Comparison
+
 Besides the extended functionality outlined above, the ChartFx optimisation goal also included achieving real-time update rates of up to 25 Hz for data sets with a few 10k up to 5 million data points. In order to optimise and compare the performance with other charting libraries, especially those with only reduced functionality, a reduced simple oscilloscope-style test case has been chosen (see `RollingBufferSample` in demos) that displays two curves with independent auto-ranging y-axes, common sliding time-series axis, and without further `ChartPlugin`s. The test-case and direct performance comparison between the ChartFx and JavaFX charting library for update rates at 25 Hz and 2 Hz is shown below.
 
 <table style="width:100%">
@@ -340,17 +341,19 @@ While the ChartFx implementation already achieved a better functionality and a b
 </figure>
 
 ## Some thoughts
+
 While starting out to improve the JDK's JavaFX Chart functionality and performance through initially extending, then gradually replacing bottle-necks, and eventually re-designing and replacing the original implementations, the resulting ChartFx library provides a substantially larger functionality and achieved an about two orders of magnitude performance improvement.
 Nevertheless, improved functionality aside, a direct performance comparison even for the best-case JavaFX scenario (static axes) with other non-JavaFX libraries demonstrated the raw JavaFX graphics performance -- despite the redesign -- being still behind the existing Java Swing-based JDataViewer and most noticeable the Qt Charts implementations. The library will continued to be maintained here at GitHub and further used for existing and future JavaFX-based control room UIs at GSI.
 The gained experience and interfaces will provide a starting point for a planned C++-based counter-part implementation using Qt or another suitable low-level charting library.
 
 ## Working on the source
+
 If you want to work on the chart-fx sourcecode, either to play with the samples or to contribute some improvements to chartFX here are some instructions how to obtain the source and compile it using maven on the command line or using eclipse.
 
 ### Maven on the command line
+
 Just clone the repository and run maven from the top level directory. The `exec:java` target can be used to execute the samples.
 Maven calls java with the corresponding options so that JavaFX is working. Because of the way the project is set up, only classes in the chartfx-samples project can be started this way.
-
 
 ```sh
 git clone
@@ -360,6 +363,7 @@ mvn exec:java
 ```
 
 ### Eclipse
+
 The following has been tested with eclipse-2019-03 and uses the m2e maven plugin. Other versions or IDEs might work similar.
 Import the repository using `Import -> Existing Maven Project`.
 This should import the parent project and the four sub-projects.
@@ -387,10 +391,12 @@ modules available and accessible to chartfx:
 
 As these parameters might change as dependencies get updated and depending on the way your project is set up,
 please check the following resources if you encounter problems with module accessibility:
+
 - [ControlsFX wiki about module visibility problems](https://github.com/controlsfx/controlsfx/wiki/Using-ControlsFX-with-JDK-9-and-above#understanding-exceptions)
 - [Blogpost with a brief explanation about the different parameters and how to use them](https://nipafx.dev/five-command-line-options-hack-java-module-system/)
 
 ### Extending chartfx
+
 If you find yourself missing some feature or not being able to access specific chart internals, the way to go is often to
 implement a custom plugin or renderer.
 
@@ -412,4 +418,5 @@ As a rule of thumb, you need to implement a custom renderer if you need to visua
 to draw something behind the chart itself.
 
 ### Acknowledgements
+
 We express our thanks and gratitude to the JavaFX community, in particular to @GregKrug and Vito Baggiolini at CERN for their valuable insights, discussions and feedback on this topic.

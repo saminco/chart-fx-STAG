@@ -2,7 +2,6 @@ package io.fair_acc.chartfx.renderer.spi;
 
 import java.security.InvalidParameterException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import javafx.beans.property.BooleanProperty;
@@ -15,8 +14,6 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.canvas.Canvas;
-import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
@@ -25,7 +22,9 @@ import javafx.scene.layout.VBox;
 
 import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.axes.Axis;
+import io.fair_acc.chartfx.axes.spi.AxisRange;
 import io.fair_acc.chartfx.renderer.Renderer;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
 import io.fair_acc.chartfx.ui.geometry.Side;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetMetaData;
@@ -97,12 +96,6 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
         setInfoBoxSide(Side.TOP); // NOPMD by rstein on 13/06/19 14:25
     }
 
-    @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        // not applicable for this class
-        return null;
-    }
-
     public BooleanProperty drawOnCanvasProperty() {
         return drawOnCanvas;
     }
@@ -161,8 +154,13 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
     }
 
     @Override
-    public ObservableList<DataSet> getDatasetsCopy() {
-        return FXCollections.observableArrayList();
+    public ObservableList<DataSetNode> getDatasetNodes() {
+        return FXCollections.emptyObservableList();
+    }
+
+    @Override
+    public void updateAxisRange(Axis axis, AxisRange range) {
+        // not applicable
     }
 
     protected List<DataSet> getDataSetsWithMetaData(List<DataSet> dataSets) {
@@ -239,8 +237,7 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
     }
 
     @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset,
-            final ObservableList<DataSet> datasets) {
+    public void render() {
         final long start = ProcessingProfiler.getTimeStamp();
 
         final ObservableList<DataSet> allDataSets = chart.getAllDatasets();
@@ -250,11 +247,11 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
         final List<String> infoMessages = isShowInfoMessages() ? extractMessages(metaDataSets, singleDS, MsgType.INFO)
                                                                : new ArrayList<>();
         final List<String> warningMessages = isShowWarningMessages()
-                                                     ? extractMessages(metaDataSets, singleDS, MsgType.WARNING)
-                                                     : new ArrayList<>();
-        final List<String> errorMessages = isShowErrorMessages()
-                                                   ? extractMessages(metaDataSets, singleDS, MsgType.ERROR)
+                                                   ? extractMessages(metaDataSets, singleDS, MsgType.WARNING)
                                                    : new ArrayList<>();
+        final List<String> errorMessages = isShowErrorMessages()
+                                                 ? extractMessages(metaDataSets, singleDS, MsgType.ERROR)
+                                                 : new ArrayList<>();
 
         if (!infoMessages.equals(oldInfoMessages)) {
             oldInfoMessages = infoMessages;
@@ -299,7 +296,6 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
         }
 
         ProcessingProfiler.getTimeDiff(start);
-        return Collections.emptyList();
     }
 
     public void setDrawOnCanvas(boolean state) {
@@ -337,9 +333,7 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
 
         // remove old pane
         borderPane.getChildren().remove(messageBox);
-        for (final Side s : Side.values()) {
-            chart.getTitleLegendPane(s).getChildren().remove(messageBox);
-        }
+        chart.getTitleLegendPane().getChildren().remove(messageBox);
 
         if (isDrawOnCanvas()) {
             switch (side) {
@@ -366,7 +360,7 @@ public class MetaDataRenderer extends AbstractMetaDataRendererParameter<MetaData
                 break;
             }
         } else {
-            chart.getTitleLegendPane(side).getChildren().add(messageBox);
+            chart.getTitleLegendPane().addSide(side, messageBox);
         }
         // chart.requestLayout();
     }

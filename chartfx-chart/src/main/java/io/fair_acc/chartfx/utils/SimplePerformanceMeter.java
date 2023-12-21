@@ -2,6 +2,8 @@ package io.fair_acc.chartfx.utils;
 
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,6 +22,7 @@ import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.layout.Region;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +30,7 @@ import org.slf4j.LoggerFactory;
 // import com.sun.javafx.perf.PerformanceTracker; // keep for the future in case this becomes public API
 import com.sun.management.OperatingSystemMXBean;
 
-public class SimplePerformanceMeter {
+public class SimplePerformanceMeter extends Region {
     private static final Logger LOGGER = LoggerFactory.getLogger(SimplePerformanceMeter.class);
     private static final int MIN_UPDATE_PERIOD = 40; // [ms]
     private static final int MAX_UPDATE_PERIOD = 10_000; // [ms]
@@ -52,8 +55,7 @@ public class SimplePerformanceMeter {
     private double cpuLoadProcessAvgInternal;
     private double cpuLoadSystemInternal;
     private double cpuLoadSystemAvgInternal = -1;
-    private final Scene scene;
-    private final Field dirtyRootBits;
+    private final Method isCleanMethod;
     private final Field dirtyNodesSize;
     private final long updateDuration;
     // private final PerformanceTracker fxPerformanceTracker; // keep for the future in case this becomes public
@@ -68,11 +70,7 @@ public class SimplePerformanceMeter {
         }
     };
 
-    public SimplePerformanceMeter(Scene scene, long updateDuration) {
-        if (scene == null) {
-            throw new IllegalArgumentException("scene must not be null");
-        }
-        this.scene = scene;
+    public SimplePerformanceMeter(long updateDuration) {
         this.updateDuration = Math.max(MIN_UPDATE_PERIOD, Math.min(updateDuration, MAX_UPDATE_PERIOD));
         // fxPerformanceTracker = PerformanceTracker.getSceneTracker(scene); // keep for the future in case this becomes public
 
@@ -80,23 +78,36 @@ public class SimplePerformanceMeter {
             @Override
             public void handle(long now) {
                 pulseCounter.getAndIncrement();
+                updateProperties();
             }
         };
 
-        Field field1 = null;
+        Method isDirtyEmpty = null;
         Field field2 = null;
         try {
-            field1 = Node.class.getDeclaredField("dirtyBits");
-            field1.setAccessible(true);
+            isDirtyEmpty = Node.class.getDeclaredMethod("isDirtyEmpty");
+            isDirtyEmpty.setAccessible(true);
             field2 = Scene.class.getDeclaredField("dirtyNodesSize");
             field2.setAccessible(true);
-        } catch (SecurityException | NoSuchFieldException e) {
+        } catch (SecurityException | NoSuchFieldException | NoSuchMethodException e) {
+            // alternate implementation (potential issues with Java Jigsaw (com.sun... dependency):
+            // return !com.sun.javafx.scene.NodeHelper.isDirtyEmpty(this.getScene().getRoot());
             LOGGER.atError().setCause(e).log("cannot access scene root's dirtyBits field");
         }
-        dirtyRootBits = field1;
+        isCleanMethod = isDirtyEmpty;
         dirtyNodesSize = field2;
 
-        registerListener(); // NOPMD
+        this.setManaged(false);
+        this.setVisible(false);
+
+        sceneProperty().addListener((bean, o, n) -> {
+            if (o != null) {
+                deregisterListener(o);
+            }
+            if (n != null) {
+                registerListener(n);
+            }
+        });
     }
 
     public ReadOnlyDoubleProperty actualFrameRateProperty() {
@@ -104,13 +115,12 @@ public class SimplePerformanceMeter {
     }
 
     /**
-     * 
      * IIR-alpha filter constant as in y(n) = alpha * x(n) + (1-alpha) * y(n-1)
-     * 
+     * <p>
      * typically: alpha ~ Ts /(Ts+T) with
-     * 
+     * <p>
      * 'Ts' being the sampling period, and 'T' the desired IIR time constant
-     * 
+     *
      * @return average factor alpha
      */
     public DoubleProperty averageFactorProperty() {
@@ -133,7 +143,7 @@ public class SimplePerformanceMeter {
         return avgSystemCpuLoad;
     }
 
-    public void deregisterListener() {
+    public void deregisterListener(final Scene scene) {
         animationTimer.stop();
         scene.removePostLayoutPulseListener(pulseListener);
         timer.cancel();
@@ -179,7 +189,7 @@ public class SimplePerformanceMeter {
         return processCpuLoad;
     }
 
-    public void registerListener() {
+    public void registerListener(final Scene scene) {
         animationTimer.start();
         timer = new Timer("SimplePerformanceMeter-timer", true);
         timer.scheduleAtFixedRate(new TimerTask() {
@@ -207,8 +217,6 @@ public class SimplePerformanceMeter {
                 frameRateAvgInternal = computeAverage(frameRateInternal, frameRateAvgInternal, alpha);
                 cpuLoadProcessAvgInternal = computeAverage(cpuLoadProcessInternal, cpuLoadProcessAvgInternal, alpha);
                 cpuLoadSystemAvgInternal = computeAverage(cpuLoadSystemInternal, cpuLoadSystemAvgInternal, alpha);
-
-                FXUtils.runFX(SimplePerformanceMeter.this::updateProperties);
             }
         }, 0, updateDuration);
         scene.addPostLayoutPulseListener(pulseListener);
@@ -244,17 +252,23 @@ public class SimplePerformanceMeter {
     }
 
     public boolean isSceneDirty() {
-        if (scene.getRoot() == null) {
+        if (this.getScene().getRoot() == null) {
             return false;
         }
         try {
-            return dirtyNodesSize.getInt(scene) != 0 || dirtyRootBits.getInt(scene.getRoot()) != 0;
-        } catch (IllegalAccessException | IllegalArgumentException ignoreException) {
-            LOGGER.atError().setCause(ignoreException).log("cannot access scene root's dirtyBits field");
+            return isDirty(getScene()) || isDirty(getScene().getRoot());
+        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException exception) {
+            LOGGER.atError().setCause(exception).log("cannot access scene root's dirtyBits field");
             return true;
         }
-        // alternate implementation (potential issues with Java Jigsaw (com.sun... dependency):
-        // return !NodeHelper.isDirtyEmpty(scene.getRoot())
+    }
+
+    private boolean isDirty(Scene scene) throws IllegalAccessException {
+        return dirtyNodesSize.getInt(scene) != 0;
+    }
+
+    private boolean isDirty(Node node) throws InvocationTargetException, IllegalAccessException {
+        return !((Boolean) isCleanMethod.invoke(node));
     }
 
     protected static double computeAverage(final double newValue, final double oldValue, final double alpha) {

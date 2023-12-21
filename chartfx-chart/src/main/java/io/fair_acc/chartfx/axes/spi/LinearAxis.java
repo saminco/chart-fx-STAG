@@ -15,6 +15,7 @@ import io.fair_acc.chartfx.axes.LogAxisType;
 import io.fair_acc.chartfx.axes.TickUnitSupplier;
 import io.fair_acc.chartfx.axes.spi.format.DefaultTickUnitSupplier;
 import io.fair_acc.chartfx.ui.css.CssPropertyFactory;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * @author rstein
@@ -428,27 +429,24 @@ public class LinearAxis extends AbstractAxis {
     }
 
     @Override
-    protected List<Double> calculateMajorTickValues(final double axisLength, final AxisRange range) {
+    protected void calculateMajorTickValues(final AxisRange range, DoubleArrayList tickValues) {
         if (range == null) {
             throw new InvalidParameterException("range is null");
         }
 
-        final List<Double> tickValues = new ArrayList<>();
-
         if (range.getLowerBound() == range.getUpperBound() || range.getTickUnit() <= 0) {
-            return Collections.singletonList(range.getLowerBound());
+            tickValues.add(range.getLowerBound());
+            return;
         }
 
         final double firstTick = LinearAxis.computeFistMajorTick(range.getLowerBound(), range.getTickUnit());
         for (double major = firstTick; major <= range.getUpperBound(); major += range.getTickUnit()) {
             tickValues.add(major);
         }
-        return tickValues;
     }
 
     @Override
-    protected List<Double> calculateMinorTickValues() {
-        final List<Double> minorTickMarks = new ArrayList<>();
+    protected void calculateMinorTickValues(DoubleArrayList minorTickMarks) {
         final double lowerBound = getMin();
         final double upperBound = getMax();
         final double majorUnit = getTickUnit();
@@ -463,8 +461,6 @@ public class LinearAxis extends AbstractAxis {
                 }
             }
         }
-
-        return minorTickMarks;
     }
 
     @Override

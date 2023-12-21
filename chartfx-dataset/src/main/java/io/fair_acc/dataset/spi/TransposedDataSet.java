@@ -2,20 +2,19 @@ package io.fair_acc.dataset.spi;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import io.fair_acc.dataset.AxisDescription;
-import io.fair_acc.dataset.event.AxisChangeEvent;
-import io.fair_acc.dataset.event.EventListener;
-import io.fair_acc.dataset.locks.DataSetLock;
-import io.fair_acc.dataset.utils.AssertUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.fair_acc.dataset.AxisDescription;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.GridDataSet;
+import io.fair_acc.dataset.events.BitState;
+import io.fair_acc.dataset.events.ChartBits;
+import io.fair_acc.dataset.locks.DataSetLock;
+import io.fair_acc.dataset.utils.AssertUtils;
 
 /**
  * Allows permutation of the axes of an underlying DataSet, for applications like: - transposed display - reduction of
@@ -70,11 +69,6 @@ public class TransposedDataSet implements DataSet {
     }
 
     @Override
-    public AtomicBoolean autoNotification() {
-        return dataSet.autoNotification();
-    }
-
-    @Override
     public double get(int dimIndex, int index) {
         return dataSet.get(permutation[dimIndex], index);
     }
@@ -100,6 +94,11 @@ public class TransposedDataSet implements DataSet {
     }
 
     @Override
+    public boolean hasDataLabels() {
+        return dataSet.hasDataLabels();
+    }
+
+    @Override
     public int getDimension() {
         return permutation.length;
     }
@@ -115,6 +114,17 @@ public class TransposedDataSet implements DataSet {
         return dataSet.getName();
     }
 
+    @Override
+    public List<String> getStyleClasses() {
+        return dataSet.getStyleClasses();
+    }
+
+    @Override
+    public DataSet addStyleClasses(String... cssClass) {
+        dataSet.addStyleClasses(cssClass);
+        return this;
+    }
+
     public int[] getPermutation() {
         return Arrays.copyOf(permutation, permutation.length);
     }
@@ -127,6 +137,11 @@ public class TransposedDataSet implements DataSet {
     @Override
     public String getStyle(int index) {
         return dataSet.getStyle(index);
+    }
+
+    @Override
+    public boolean hasStyles() {
+        return dataSet.hasStyles();
     }
 
     /**
@@ -177,7 +192,7 @@ public class TransposedDataSet implements DataSet {
                 LOGGER.atDebug().addArgument(this.permutation).log("applied permutation: {}");
             }
         });
-        this.invokeListener(new AxisChangeEvent(this, "Permutation changed", -1));
+        fireInvalidated(ChartBits.DataSetPermutation);
     }
 
     @Override
@@ -195,16 +210,6 @@ public class TransposedDataSet implements DataSet {
         throw new UnsupportedOperationException("copy setting transposed data set is not implemented");
     }
 
-    @Override
-    public boolean isVisible() {
-        return dataSet.isVisible();
-    }
-
-    @Override
-    public DataSet setVisible(boolean visible) {
-        return dataSet.setVisible(visible);
-    }
-
     public void setTransposed(final boolean transposed) {
         this.lock().writeLockGuard(() -> {
             if (this.transposed != transposed) {
@@ -214,12 +219,12 @@ public class TransposedDataSet implements DataSet {
                 this.transposed = transposed;
             }
         });
-        this.invokeListener(new AxisChangeEvent(this, "(Un)transposed", -1));
+        fireInvalidated(ChartBits.DataSetPermutation);
     }
 
     @Override
-    public List<EventListener> updateEventListener() {
-        return dataSet.updateEventListener();
+    public BitState getBitState() {
+        return dataSet.getBitState();
     }
 
     public static TransposedDataSet permute(DataSet dataSet, int[] permutation) {
@@ -272,7 +277,7 @@ public class TransposedDataSet implements DataSet {
                 }
                 super.setPermutation(permutation);
             });
-            this.invokeListener(new AxisChangeEvent(this, "Permutation changed", -1));
+            fireInvalidated(ChartBits.DataSetPermutation);
         }
 
         @Override

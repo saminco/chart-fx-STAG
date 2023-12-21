@@ -5,11 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.security.InvalidParameterException;
 import java.util.Calendar;
 
-import io.fair_acc.chartfx.renderer.spi.financial.css.FinancialColorSchemeConfig;
-import io.fair_acc.chartfx.renderer.spi.financial.css.FinancialColorSchemeConstants;
-import io.fair_acc.chartfx.renderer.spi.financial.service.OhlcvRendererEpData;
-import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
-import io.fair_acc.chartfx.ui.utils.TestFx;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.paint.Color;
@@ -25,10 +20,13 @@ import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.AxisLabelOverlapPolicy;
 import io.fair_acc.chartfx.axes.spi.CategoryAxis;
 import io.fair_acc.chartfx.axes.spi.DefaultNumericAxis;
+import io.fair_acc.chartfx.renderer.spi.financial.service.OhlcvRendererEpData;
 import io.fair_acc.chartfx.renderer.spi.financial.utils.CalendarUtils;
 import io.fair_acc.chartfx.renderer.spi.financial.utils.FinancialTestUtils;
 import io.fair_acc.chartfx.renderer.spi.financial.utils.FinancialTestUtils.TestChart;
 import io.fair_acc.chartfx.renderer.spi.financial.utils.Interval;
+import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
+import io.fair_acc.chartfx.ui.utils.TestFx;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.spi.AbstractDataSet;
 import io.fair_acc.dataset.spi.financial.OhlcvDataSet;
@@ -77,7 +75,7 @@ class HighLowRendererTest {
         rendererTested.addPaintAfterEp(data -> assertNotNull(data.gc));
         assertEquals(1, rendererTested.getPaintAfterEps().size());
 
-        new FinancialColorSchemeConfig().applyTo(FinancialColorSchemeConstants.SAND, chart);
+        FinancialTheme.Sand.applyPseudoClasses(chart);
 
         stage.setScene(new Scene(chart, 800, 600));
         stage.show();
@@ -86,7 +84,7 @@ class HighLowRendererTest {
     @TestFx
     void categoryAxisTest() {
         final CategoryAxis xAxis = new CategoryAxis("time [iso]");
-        xAxis.setTickLabelRotation(90);
+        xAxis.getTickLabelStyle().setRotate(90);
         xAxis.setOverlapPolicy(AxisLabelOverlapPolicy.SKIP_ALT);
         ohlcvDataSet.setCategoryBased(true);
 
@@ -133,9 +131,9 @@ class HighLowRendererTest {
         assertFalse(highLowRenderer.isPaintVolume());
     }
 
-    @Test
+    @TestFx
     void noXyChartInstance() {
-        assertThrows(InvalidParameterException.class, () -> rendererTested.render(new Canvas(300, 200).getGraphicsContext2D(), new TestChart(), 0, null)); // NOSONAR NOPMD
+        assertThrows(InvalidParameterException.class, () -> rendererTested.setChart(new TestChart())); // NOSONAR NOPMD
     }
 
     @Test

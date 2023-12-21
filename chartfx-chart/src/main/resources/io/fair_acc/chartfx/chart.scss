@@ -1,0 +1,402 @@
+@use "_palette.scss" as palette;
+@use "_financial.scss";
+
+$null: null; // null gets removed from Sass. Maybe create a placeholder and replace after generation?
+
+.chart-datapoint-tooltip-label {
+  -fx-background-color: rgb(153, 204, 204);
+  -fx-border-color: black;
+  -fx-border-radius: 3;
+  -fx-font-size: 12;
+  -fx-font-weight: bold;
+  -fx-text-alignment: center;
+}
+
+.chart-crosshair-path {
+  -fx-stroke-width: 1;
+}
+
+.chart-zoom-rect {
+  -fx-fill: dodgerblue;
+  -fx-stroke: #002966;
+  -fx-stroke-type: inside;
+  -fx-stroke-width: 1;
+  -fx-opacity: 0.2;
+}
+
+.chart-select-rect {
+  -fx-fill: transparent;
+  -fx-stroke: gray;
+  -fx-stroke-width: 1.5;
+  -fx-stroke-dash-offset: 6;
+  -fx-stroke-dash-array: 12 2 4 2;
+  -fx-stroke-line-cap: butt;
+  -fx-effect: dropshadow(three-pass-box, derive(gray, -20%), 10, 0, 4, 4);
+}
+
+.chart-select-marker {
+  -fx-fill: transparent;
+  -fx-stroke: lightGreen;
+  -fx-stroke-width: 1.5;
+  -fx-stroke-dash-offset: 6;
+  -fx-stroke-dash-array: 12 2 4 2;
+  -fx-stroke-line-cap: butt;
+  -fx-opacity: 1;
+  -fx-effect: dropshadow(three-pass-box, green, 5, 0.5, 0, 0);
+}
+
+.chart-select-marker:noedit {
+  -fx-fill: transparent;
+  -fx-stroke: red;
+  -fx-stroke-width: 1.5;
+  -fx-stroke-dash-offset: 6;
+  -fx-stroke-dash-array: 12 2 4 2;
+  -fx-stroke-line-cap: butt;
+  -fx-opacity: 1;
+  -fx-effect: dropshadow(three-pass-box, red, 5, 0.5, 0, 0);
+}
+
+.chart-series-line {
+  -fx-stroke-width: 1px;
+  -fx-effect: $null;
+}
+
+.value-indicator-label {
+  -fx-background-color: #f4e242;
+  -fx-border-color: black;
+  -fx-border-radius: 2;
+  -fx-font-size: 12;
+  -fx-font-weight: bold;
+  -fx-text-alignment: center;
+  -fx-padding: 1 2 1 2;
+}
+
+.range-indicator-label {
+  -fx-background-color: #f4e242;
+  -fx-border-color: black;
+  -fx-border-radius: 2;
+  -fx-font-size: 12;
+  -fx-font-weight: bold;
+  -fx-text-alignment: center;
+  -fx-padding: 1 2 1 2;
+}
+
+.value-indicator-line {
+  -fx-stroke-width: 1;
+  -fx-stroke: black;
+  -fx-stroke-dash-array: 8;
+}
+
+.value-indicator-marker {
+  -fx-stroke-width: 0.5;
+  -fx-stroke: derive(-fx-background, -30%);
+  -fx-fill: dodgerblue;
+}
+
+.value-watch-indicator-label {
+  -fx-background-color: transparent;
+  -fx-border-color: transparent;
+  -fx-border-radius: 0;
+  -fx-font-size: 11;
+  -fx-font-weight: bold;
+  -fx-text-fill: white;
+  -fx-text-alignment: center;
+  -fx-padding: 2.5 4 1 8;
+}
+
+.value-watch-indicator-line {
+  -fx-stroke-width: 1;
+  -fx-stroke: black;
+  -fx-stroke-dash-array: 8;
+}
+
+.value-watch-indicator-marker {
+  -fx-stroke-width: 0.5;
+  -fx-stroke: black;
+  -fx-fill: #416ef4ff;
+}
+
+.range-indicator-rect {
+  -fx-stroke: transparent;
+  -fx-fill: #416ef468;
+}
+
+// Full Chart hierarchy for reference
+.chart {
+  .chart-measurement-pane {
+    .chart-title-pane, .chart-legend-pane {
+      .chart-title {
+      }
+      .chart-legend {
+        .chart-legend-item {
+        }
+      }
+      .chart-content {
+        .axis {
+          .axis-major-tick-mark {
+          }
+          .axis-minor-tick-mark {
+          }
+          .axis-label {
+          }
+          .axis-tick-label {
+          }
+        }
+        .chart-plot-background {
+        }
+        .chart-plot-area {
+          .chart-canvas-area {
+            .chart-canvas {
+            }
+            .chart-canvas-foreground {
+            }
+          }
+        }
+        .chart-plot-foreground {
+        }
+      }
+    }
+  }
+
+  .grid-renderer {
+    .chart-major-grid-lines {
+    }
+    .chart-minor-grid-lines {
+    }
+  }
+}
+
+.chart, .renderer {
+  @include palette.pseudoClassPalettes();
+}
+
+// XY Chart styles
+.chart {
+
+  // Set some reasonable default sizes so JavaFX panes won't flicker
+  // (often +/- 1px) and users users can override them via CSS
+  -fx-padding: 0px;
+  -fx-min-width: 100px;
+  -fx-min-height: 100px;
+  -fx-pref-width: 600px;
+  -fx-pref-height: 450px;
+  -fx-max-height: 4096px;
+  -fx-max-width: 4096px;
+
+  -fx-tool-bar-side: top; // TODO: move side property one level up?
+
+  // Let users change the color scheme by setting CSS pseudo classes
+  // default maps to no pseudo class, other pseudo classes overwrite
+  @include palette.tuneviewer(); // when there is no pseudo class
+  -fx-color-palette: default; // default, adobe, tuneviewer, dell
+
+  .chart-title {
+    visibility: visible;
+    -fx-alignment: center;
+    -fx-side: top;
+    -fx-rotate: 0;
+
+    &:left {
+      -fx-rotate: -90;
+    }
+
+    &:right {
+      -fx-rotate: 90;
+    }
+
+  }
+
+  .chart-legend {
+    visibility: visible;
+    -fx-orientation: horizontal;
+    -fx-side: bottom;
+    -fx-vgap: 5px;
+    -fx-hgap: 5px;
+    -fx-alignment: center;
+    -fx-symbol-width: 20;
+    -fx-symbol-height: 20;
+
+    .chart-legend-item {
+      -fx-alignment: center-left;
+      -fx-content-display: left;
+    }
+
+  }
+
+  .renderer {
+    // abstract renderer
+    -fx-show-in-legend: true;
+    -fx-use-global-color-index: true;
+
+    // point reducing renderers
+    -fx-assume-sorted-data: true;
+    -fx-min-required-reduction-size: 5;
+    -fx-parallel-implementation: true;
+    -fx-point-reduction: true;
+  }
+
+  .error-dataset-renderer {
+    -fx-poly-line-style: normal; // normal, area, zero-order-holder, stair-case, histogram, histogram-filled, bezier-curve
+    -fx-error-style: errorcombo; // none, errorbars, errorsurface, errorcombo
+    -fx-dash-size: 3;
+    -fx-allow-nans: false;
+
+    -fx-draw-bubbles: false;
+    -fx-draw-marker: true;
+    -fx-marker-size: 1.5;
+
+    -fx-draw-bars: false;
+    -fx-shift-bar: true;
+    -fx-shift-bar-offset: 3;
+    -fx-dynamic-bar-width: true;
+    -fx-bar-width-percentage: 70.0;
+    -fx-bar-width: 5;
+    -fx-intensity-fading: 0.65;
+  }
+
+}
+
+.dataset {
+  @include palette.defaultColorDefinitions(15);
+
+  // Marker
+  -fx-marker-color: -color-dataset;
+  -fx-marker-type: rectangle; // rectangle, circle, diamond, etc.
+  -fx-marker-size: 1.5; // 0 to disable
+  -fx-marker-line-width: 0.5;
+  -fx-marker-line-dash-array: null;
+
+  // PolyLine
+  -fx-line-color: -color-dataset;
+  -fx-line-width: 1.0; // 0 to disable
+  -fx-line-dash-array: null;
+  -fx-line-miter-limit: 1.0;
+  -fx-line-cap: butt;
+  -fx-line-join: bevel;
+
+}
+
+// Axis styles
+.axis {
+
+  -fx-border-width: 0px;
+
+  // Determining data range
+  -fx-auto-ranging: true; // always updates to the range of the data
+  -fx-auto-grow-ranging: false; // range updates, but won't shrink
+  -fx-auto-range-rounding: false; // auto range w/ rounding
+
+  -fx-auto-range-padding: 0;
+  -fx-auto-unit-scaling: false;
+  -fx-invert-axis: false;
+
+  // Tick spacing (along the width on horizontal axes)
+  -fx-axis-center-position: 0.5; // only for centered axes: relative position of the center line
+  -fx-overlap-policy: SKIP_ALT; // DO_NOTHING, SKIP_ALT, NARROW_FONT, SHIFT_ALT, FORCED_SHIFT_ALT
+  -fx-axis-padding: 15px; // overdraw area to the sides of the axis
+  -fx-tick-label-spacing: 3px; // min spacing between two tick labels
+  -fx-max-major-tick-label-count: 20;
+  -fx-minor-tick-count: 10;
+
+  // Axis size (maps to height on horizontal axes)
+  -fx-tick-mark-gap: 0px; // gap between canvas and axis line
+  -fx-tick-length: 8px; // length of tick mark lines
+  -fx-minor-tick-length: 5px; // length of minor tick mark lines
+  -fx-tick-label-gap: 3px; // gap between tick marks and labels
+  -fx-axis-label-gap: 3px; // gap between tick labels and axis label
+
+  .axis-label, .axis-tick-label {
+    visibility: visible;
+    -fx-font-family: 'System';
+    -fx-font-smoothing-type: gray; // gray | lcd
+    -fx-stroke: transparent;
+    -fx-fill: black;
+    -fx-rotate: 0;
+  }
+
+  .axis-label {
+    -fx-text-alignment: CENTER;
+    -fx-font-size: 12px;
+  }
+
+  &:center .axis-label {
+    -fx-text-alignment: RIGHT;
+  }
+
+  &:vertical .axis-label {
+    -fx-rotate: -90;
+  }
+
+  .axis-tick-label {
+    -fx-text-alignment: $null;
+    -fx-font-size: 10px;
+  }
+
+  .axis-major-tick-mark, .axis-minor-tick-mark {
+    visibility: visible;
+    -fx-stroke: #c3c3c3ff;
+    -fx-stroke-width: 1.0;
+  }
+
+}
+
+.grid-renderer {
+
+  $DEFAULT_GRID_DASH_PATTERN: 4.5, 2.5;
+  $DEFAULT_LINE_WIDTH: 0.5;
+  -fx-draw-grid-on-top: true;
+
+  .chart-major-grid-lines {
+    -fx-stroke: derive(-fx-background, -10%);
+    -fx-stroke-dash-array: $DEFAULT_GRID_DASH_PATTERN;
+    -fx-stroke-width: $DEFAULT_LINE_WIDTH;
+    visibility: visible;
+
+    // less subtle if we also show the minor grid lines
+    &:withMinor {
+      -fx-stroke: derive(-fx-background, -20%);
+    }
+
+  }
+
+  .chart-minor-grid-lines {
+    -fx-stroke: derive(-fx-background, -5%);
+    -fx-stroke-dash-array: $DEFAULT_GRID_DASH_PATTERN;
+    -fx-stroke-width: $DEFAULT_LINE_WIDTH;
+    visibility: hidden;
+  }
+
+  .chart-major-vertical-lines .chart-major-grid-lines {
+    /* use this to override v-specific settings */
+  }
+
+  .chart-major-horizontal-grid-lines .chart-major-grid-lines {
+    /* use this to override h-specific settings */
+  }
+
+  .chart-minor-vertical-grid-lines .chart-minor-grid-lines {
+    /* use this to override v-specific settings */
+  }
+
+  .chart-minor-horizontal-grid-lines .chart-minor-grid-lines {
+    /* use this to override h-specific settings */
+  }
+
+}
+
+.chart-alternative-column-fill {
+  -fx-fill: $null;
+  -fx-stroke: $null;
+}
+
+.chart-alternative-row-fill {
+  -fx-fill: $null;
+  -fx-stroke: $null;
+}
+
+.chart-vertical-zero-line,
+.chart-horizontal-zero-line {
+  -fx-stroke: derive(-fx-text-background-color, 40%);
+}
+
+@include financial.financial-themes();

@@ -19,6 +19,7 @@ import io.fair_acc.chartfx.axes.spi.transforms.DefaultAxisTransform;
 import io.fair_acc.chartfx.ui.css.CssPropertyFactory;
 import io.fair_acc.dataset.AxisDescription;
 import io.fair_acc.dataset.spi.DataRange;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * Implements an Oscilloscope-like axis with a default of 10 divisions (tick marks) and fixed zero (or offset) screen
@@ -237,10 +238,10 @@ public class OscilloscopeAxis extends AbstractAxis implements Axis {
     }
 
     @Override
-    protected List<Double> calculateMajorTickValues(double length, AxisRange axisRange) {
-        final List<Double> tickValues = new ArrayList<>();
+    protected void calculateMajorTickValues(AxisRange axisRange, DoubleArrayList tickValues) {
         if (axisRange.getMin() == axisRange.getMax() || axisRange.getTickUnit() <= 0) {
-            return Collections.singletonList(axisRange.getMin());
+            tickValues.add(axisRange.getMin());
+            return;
         }
 
         final double firstTick = Math.ceil(axisRange.getMin() / axisRange.getTickUnit()) * axisRange.getTickUnit();
@@ -248,22 +249,21 @@ public class OscilloscopeAxis extends AbstractAxis implements Axis {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.atDebug().log("major ticks numerically not resolvable");
             }
-            return tickValues;
+            return;
         }
+
         final int maxTickCount = getMaxMajorTickLabelCount();
         for (double major = firstTick; (major <= axisRange.getMax() && tickValues.size() <= maxTickCount); major += axisRange.getTickUnit()) {
             tickValues.add(major);
         }
-        return tickValues;
     }
 
     @Override
-    protected List<Double> calculateMinorTickValues() {
+    protected void calculateMinorTickValues(DoubleArrayList newMinorTickMarks) {
         if (getMinorTickCount() <= 0 || getTickUnit() <= 0) {
-            return Collections.emptyList();
+            return;
         }
 
-        final List<Double> newMinorTickMarks = new ArrayList<>();
         final double lowerBound = getMin();
         final double upperBound = getMax();
         final double majorUnit = getTickUnit();
@@ -291,8 +291,6 @@ public class OscilloscopeAxis extends AbstractAxis implements Axis {
             }
             majorTickCount++;
         }
-
-        return newMinorTickMarks;
     }
 
     @Override
@@ -374,7 +372,8 @@ public class OscilloscopeAxis extends AbstractAxis implements Axis {
     }
 
     @Override
-    protected void updateCachedVariables() {
+    public void updateCachedTransforms() {
+        super.updateCachedTransforms();
         if (cache == null) { // lgtm [java/useless-null-check] NOPMD NOSONAR -- called from static initializer
             return;
         }
@@ -418,15 +417,11 @@ public class OscilloscopeAxis extends AbstractAxis implements Axis {
         protected double upperBoundLog;
         protected double lowerBoundLog;
         protected double logScaleLength;
-        protected double logScaleLengthInv;
-        protected boolean isVerticalAxis;
-        protected double axisWidth;
-        protected double axisHeight;
+        protected double axisLength;
         protected double offset;
 
         private void updateCachedAxisVariables() {
-            axisWidth = getWidth();
-            axisHeight = getHeight();
+            axisLength = getLength();
             localCurrentLowerBound = getMin();
             localCurrentUpperBound = getMax();
 
@@ -434,24 +429,11 @@ public class OscilloscopeAxis extends AbstractAxis implements Axis {
             lowerBoundLog = axisTransform.forward(getMin());
             logScaleLength = upperBoundLog - lowerBoundLog;
 
-            logScaleLengthInv = 1.0 / logScaleLength;
-
             localScale = scaleProperty().get();
             final double zero = OscilloscopeAxis.super.getDisplayPosition(0);
             localOffset = zero + localCurrentLowerBound * localScale;
             localOffset2 = localOffset - cache.localCurrentLowerBound * cache.localScale;
-
-            if (getSide() != null) {
-                isVerticalAxis = getSide().isVertical();
-            }
-
-            if (isVerticalAxis) {
-                logScaleLengthInv = axisHeight / logScaleLength;
-            } else {
-                logScaleLengthInv = axisWidth / logScaleLength;
-            }
-
-            offset = isVerticalAxis ? getHeight() : getWidth();
+            offset = axisLength;
         }
     }
 

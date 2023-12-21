@@ -75,7 +75,7 @@ class YWatchValueIndicatorTest {
     @TestFx
     void setMarkerValue() {
         valueWatchIndicatorTested.setMarkerValue(35.15);
-        assertEquals(" 35.2", valueWatchIndicatorTested.getText());
+        assertEquals("35", valueWatchIndicatorTested.getText()); // uses axis formatting. If this changes to include decimals, make sure to be locale agnostic
         assertEquals(35.15, valueWatchIndicatorTested.getValue(), 1e-2);
     }
 
@@ -97,7 +97,7 @@ class YWatchValueIndicatorTest {
             assertFalse(valueWatchIndicatorTested.isPreventOcclusion());
             valueWatchIndicatorTested.setPreventOcclusion(true);
             assertTrue(valueWatchIndicatorTested.isPreventOcclusion());
-            chart.requestLayout();
+            chart.invalidate();
         });
         robot.interrupt(1);
         robot.interact(() -> {

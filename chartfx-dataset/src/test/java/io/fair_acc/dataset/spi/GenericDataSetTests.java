@@ -1,23 +1,22 @@
 package io.fair_acc.dataset.spi;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import static io.fair_acc.dataset.DataSet.DIM_X;
 import static io.fair_acc.dataset.DataSet.DIM_Y;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-import io.fair_acc.dataset.event.UpdatedMetaDataEvent;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetError;
+import io.fair_acc.dataset.events.BitState;
+import io.fair_acc.dataset.events.ChartBits;
 
 /**
  * Generic DataSet interface tests that (nearly) all DataSets should fulfill.
@@ -58,23 +57,6 @@ class GenericDataSetTests {
     @ParameterizedTest
     @MethodSource("dataSetClassProvider")
     @Timeout(1)
-    void testVisibility(final Class<DataSet> clazz) throws AssertionError {
-        DataSet dataSet = getDefaultTestDataSet(clazz, DEFAULT_DATASET_NAME1, DEFAULT_COUNT_MAX + 2);
-        final AtomicBoolean visibilityChanged = new AtomicBoolean(false);
-        dataSet.addListener(event -> {
-            if (event instanceof UpdatedMetaDataEvent && event.getMessage().equals("changed visibility")) {
-                visibilityChanged.set(true);
-            }
-        });
-        assertTrue(dataSet.isVisible());
-        dataSet.setVisible(false);
-        assertFalse(dataSet.isVisible());
-        assertTrue(visibilityChanged.get());
-    }
-
-    @ParameterizedTest
-    @MethodSource("dataSetClassProvider")
-    @Timeout(1)
     void testSetDataSet(final Class<DataSet> clazz) throws AssertionError {
         DataSet dataSet = getDefaultTestDataSet(clazz, DEFAULT_DATASET_NAME1, DEFAULT_COUNT_MAX);
         assertNotNull(dataSet, "test data set: " + clazz.getName());
@@ -93,7 +75,10 @@ class GenericDataSetTests {
         }
 
         final AtomicInteger notifyCounter = new AtomicInteger();
-        dataSet.addListener(evt -> notifyCounter.getAndIncrement());
+        final int bit = BitState.mask(ChartBits.DataSetDataAdded);
+        dataSet.getBitState().addChangeListener(bit, (src, bits) -> notifyCounter.getAndIncrement());
+
+        dataSet.getBitState().clear(bit);
         assertDoesNotThrow(() -> dataSet.set(testDataSet));
         assertSameDataRanges(testDataSet, dataSet);
         dataSet.recomputeLimits(DIM_X);
@@ -101,10 +86,13 @@ class GenericDataSetTests {
         assertSameDataRanges(testDataSet, dataSet);
 
         assertEquals(1, notifyCounter.get());
+        dataSet.getBitState().clear(bit);
         assertDoesNotThrow(() -> dataSet.set(testDataSet, true));
         assertEquals(2, notifyCounter.get());
+        dataSet.getBitState().clear(bit);
         assertDoesNotThrow(() -> dataSet.set(testDataSet, false));
         assertEquals(3, notifyCounter.get());
+        dataSet.getBitState().clear(bit);
 
         notifyCounter.set(0);
         assertDoesNotThrow(() -> dataSet.set(testDataSetError));
@@ -114,10 +102,13 @@ class GenericDataSetTests {
         assertSameDataRanges(testDataSetError, dataSet);
 
         assertEquals(1, notifyCounter.get());
+        dataSet.getBitState().clear(bit);
         assertDoesNotThrow(() -> dataSet.set(testDataSetError, true));
         assertEquals(2, notifyCounter.get());
+        dataSet.getBitState().clear(bit);
         assertDoesNotThrow(() -> dataSet.set(testDataSetError, false));
         assertEquals(3, notifyCounter.get());
+        dataSet.getBitState().clear(bit);
     }
 
     public static void assertSameDataRanges(final DataSet reference, final DataSet test) throws AssertionError {

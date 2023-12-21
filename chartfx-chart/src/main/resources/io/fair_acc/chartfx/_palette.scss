@@ -1,0 +1,158 @@
+@mixin misc() {
+  -color-dataset-1: #5DA5DA; // (blue)
+  -color-dataset-2: #F15854; // (red)
+  -color-dataset-3: #FAA43A; // (orange)
+  -color-dataset-4: #60BD68; // (green)
+  -color-dataset-5: #F17CB0; // (pink)
+  -color-dataset-6: #B2912F; // (brown)
+  -color-dataset-7: #B276B2; // (purple)
+  -color-dataset-8: #DECF3F; // (yellow)
+  -color-dataset-9: #4D4D4D; // (gray)
+  -fx-color-count: 9;
+}
+
+@mixin adobe() {
+  -color-dataset-1: #00a4e4; // blue
+  -color-dataset-2: #ff0000; // red
+  -color-dataset-3: #fbb034; // orange
+  -color-dataset-4: #ffdd00; // yellow
+  -color-dataset-5: #c1d82f; // green
+  -color-dataset-6: #8a7967; // brown
+  -color-dataset-7: #6a737b; // darkbrown/black
+  -fx-color-count: 7;
+}
+
+@mixin dell() {
+  -color-dataset-1: #0085c3;
+  -color-dataset-2: #7ab800;
+  -color-dataset-3: #f2af00;
+  -color-dataset-4: #dc5034;
+  -color-dataset-5: #6e2585;
+  -color-dataset-6: #71c6c1;
+  -color-dataset-7: #009bbb;
+  -color-dataset-8: #444444;
+  -fx-color-count: 8;
+}
+
+@mixin equidistant() {
+  -color-dataset-1: #003f5c;
+  -color-dataset-2: #2f4b7c;
+  -color-dataset-3: #665191;
+  -color-dataset-4: #a05195;
+  -color-dataset-5: #d45087;
+  -color-dataset-6: #f95d6a;
+  -color-dataset-7: #ff7c43;
+  -color-dataset-8: #ffa600;
+  -fx-color-count: 8;
+}
+
+@mixin tuneviewer() {
+  // old legacy color scheme from an earlier project
+  -color-dataset-1: #0000c8; // dark blue
+  -color-dataset-2: #c80000; // dark red
+  -color-dataset-3: #00c800; // dark green
+  -color-dataset-4: orange;
+  -color-dataset-5: magenta;
+  -color-dataset-6: cyan;
+  -color-dataset-7: darkgray;
+  -color-dataset-8: pink;
+  -color-dataset-9: black;
+  -fx-color-count: 9;
+}
+
+@mixin matlab-light() {
+  // default MATLAB 'colororder' https://mathworks.com/help/matlab/ref/colororder.html
+  -color-dataset-1: #0072bd;
+  -color-dataset-2: #d95319;
+  -color-dataset-3: #edb120;
+  -color-dataset-4: #7e2f8e;
+  -color-dataset-5: #77ac30;
+  -color-dataset-6: #4dbeee;
+  -color-dataset-7: #a2142f;
+  -fx-color-count: 7;
+}
+
+@mixin matlab-dark() {
+  // https://mathworks.com/matlabcentral/fileexchange/86533-dark-mode-plot
+  -color-dataset-1: #5995bd;
+  -color-dataset-2: #d97347;
+  -color-dataset-3: #edb120; // same
+  -color-dataset-4: #da51f5;
+  -color-dataset-5: #77ac30; // same
+  -color-dataset-6: #4dbeee; // same
+  -color-dataset-7: #a2898d;
+  -fx-color-count: 7;
+}
+
+@mixin modena() {
+  -color-dataset-1: CHART_COLOR_1;
+  -color-dataset-2: CHART_COLOR_2;
+  -color-dataset-3: CHART_COLOR_3;
+  -color-dataset-4: CHART_COLOR_4;
+  -color-dataset-5: CHART_COLOR_5;
+  -color-dataset-6: CHART_COLOR_6;
+  -color-dataset-7: CHART_COLOR_7;
+  -color-dataset-8: CHART_COLOR_8;
+  -fx-color-count: 8;
+}
+
+@mixin atlantafx() {
+  -color-dataset-1: -color-chart-1;
+  -color-dataset-2: -color-chart-2;
+  -color-dataset-3: -color-chart-3;
+  -color-dataset-4: -color-chart-4;
+  -color-dataset-5: -color-chart-5;
+  -color-dataset-6: -color-chart-6;
+  -color-dataset-7: -color-chart-7;
+  -color-dataset-8: -color-chart-8;
+  -fx-color-count: 8;
+}
+
+@mixin pseudoClassPalettes() {
+  &:palette-misc {
+    @include misc();
+  }
+
+  &:palette-adobe {
+    @include adobe();
+  }
+
+  &:palette-dell {
+    @include dell();
+  }
+
+  &:palette-equidistant {
+    @include equidistant();
+  }
+
+  &:palette-tuneviewer {
+    @include tuneviewer();
+  }
+
+  &:palette-matlab-light {
+    @include matlab-light();
+  }
+
+  &:palette-matlab-dark {
+    @include matlab-dark();
+  }
+
+  &:palette-modena {
+    @include modena();
+  }
+
+  &:palette-atlantafx {
+    @include atlantafx();
+  }
+}
+
+// CSS classes that map selectors to the specified default colors
+// Classes with undefined colors are ignored until used.
+@mixin defaultColorDefinitions($maxColors) {
+  @for $i from 0 through $maxColors {
+    &.default-color#{$i} {
+      // Add another lookup layer so it's easier to override all
+      -color-dataset: -color-dataset-#{$i+1};
+    }
+  }
+}

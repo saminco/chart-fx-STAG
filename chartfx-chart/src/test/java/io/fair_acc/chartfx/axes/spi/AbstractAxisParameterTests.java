@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import static io.fair_acc.dataset.DataSet.DIM_X;
 
-import java.util.List;
-
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
@@ -19,6 +17,7 @@ import io.fair_acc.chartfx.axes.AxisLabelOverlapPolicy;
 import io.fair_acc.chartfx.axes.AxisTransform;
 import io.fair_acc.chartfx.axes.LogAxisType;
 import io.fair_acc.chartfx.ui.geometry.Side;
+import io.fair_acc.dataset.events.ChartBits;
 
 /**
  * Tests the getter/setter interface of AbstractAxisParameter
@@ -29,7 +28,18 @@ class AbstractAxisParameterTests {
     @Test
     void testAutoGetterSetters() {
         AbstractAxisParameter axis = new EmptyAbstractAxisParameter();
-        axis.set(0.0, 10.0);
+
+        assertEquals(-1, axis.getMin());
+        assertEquals(+1, axis.getMax());
+        assertEquals(Double.NaN, axis.getUserRange().getMin());
+        assertEquals(Double.NaN, axis.getUserRange().getMax());
+
+        axis.set(0.1, 10.0);
+
+        assertEquals(0.1, axis.getMin());
+        assertEquals(10, axis.getMax());
+        assertEquals(0.1, axis.getUserRange().getMin());
+        assertEquals(10, axis.getUserRange().getMax());
 
         assertNull(axis.getRange());
 
@@ -68,13 +78,23 @@ class AbstractAxisParameterTests {
     @Test
     void testBasicGetterSetters() {
         AbstractAxisParameter axis = new EmptyAbstractAxisParameter();
-        axis.set(0.0, 10.0);
 
-        assertFalse(axis.isValid());
-        axis.validProperty().set(true);
-        assertTrue(axis.isValid());
-        axis.invalidate();
-        assertFalse(axis.isValid());
+        // Match previous unit test behavior by immediately updating the label and
+        // applying changes to the range rather than user range.
+        var state = axis.getBitState();
+        state.addChangeListener(ChartBits.AxisLabelText, (src, bits) -> {
+            axis.updateScale();
+            axis.updateAxisLabel();
+            state.clear(ChartBits.AxisLabelText);
+        });
+
+        assertTrue(state.isDirty());
+        state.clear();
+        assertTrue(state.isClean());
+
+        axis.set(0.0, 10.0);
+        assertTrue(state.isDirty());
+        state.clear();
 
         axis.set(Double.NaN, Double.NaN);
         assertFalse(axis.isDefined());
@@ -150,13 +170,10 @@ class AbstractAxisParameterTests {
         for (Side side : Side.values()) {
             axis.setSide(side);
             assertEquals(side, axis.getSide());
-            if (side.isHorizontal()) {
-                assertEquals(axis.getWidth(), axis.getLength());
-            } else {
-                assertEquals(axis.getHeight(), axis.getLength());
-            }
+            assertTrue(state.isDirty(ChartBits.AxisLayout));
+            state.clear(ChartBits.AxisLayout);
         }
-        axis.setSide(null);
+        assertThrows(IllegalArgumentException.class, () -> axis.setSide(null));
         assertEquals(Double.NaN, axis.getLength());
         axis.setSide(Side.LEFT);
 
@@ -180,9 +197,9 @@ class AbstractAxisParameterTests {
         assertEquals(0.001, axis.getUnitScaling());
 
         assertFalse(axis.isInvertedAxis());
-        axis.invertAxis(true); //TODO: rename function w.r.t. setter
+        axis.invertAxis(true); // TODO: rename function w.r.t. setter
         assertTrue(axis.isInvertedAxis());
-        axis.invertAxis(false); //TODO: rename function w.r.t. setter
+        axis.invertAxis(false); // TODO: rename function w.r.t. setter
 
         axis.setTickUnit(1e6);
         assertEquals("test axis name", axis.getName());
@@ -214,11 +231,6 @@ class AbstractAxisParameterTests {
         assertEquals(0.2, axis.getAxisCenterPosition());
         axis.setAxisCenterPosition(0.5);
 
-        assertEquals(TextAlignment.CENTER, axis.getAxisLabelTextAlignment()); //TODO: rename function w.r.t. setter
-        axis.setAxisLabelTextAlignment(TextAlignment.LEFT);
-        assertEquals(TextAlignment.LEFT, axis.getAxisLabelTextAlignment()); //TODO: rename function w.r.t. setter
-        axis.setAxisLabelTextAlignment(TextAlignment.CENTER);
-
         axis.setAxisLabelGap(5);
         assertEquals(5, axis.getAxisLabelGap());
 
@@ -231,11 +243,11 @@ class AbstractAxisParameterTests {
         AbstractAxisParameter axis = new EmptyAbstractAxisParameter();
         axis.set(0.0, 10.0);
 
-        axis.setTickLabelFill(Color.RED);
-        assertEquals(Color.RED, axis.getTickLabelFill());
+        axis.getTickLabelStyle().setFill(Color.RED);
+        assertEquals(Color.RED, axis.getTickLabelStyle().getFill());
 
         final Font font = Font.font("System", 10);
-        axis.setTickLabelFont(font);
+        axis.getTickLabelStyle().setFont(font);
         assertEquals(font, axis.getTickLabelFont());
 
         StringConverter<Number> myConverter = new StringConverter<>() {
@@ -258,13 +270,13 @@ class AbstractAxisParameterTests {
         axis.setTickLabelSpacing(5);
         assertEquals(5, axis.getTickLabelSpacing());
 
-        axis.setTickLabelRotation(10);
+        axis.getTickLabelStyle().setRotate(10);
         assertEquals(10, axis.getTickLabelRotation());
 
         assertTrue(axis.isTickLabelsVisible());
-        axis.setTickLabelsVisible(false);
+        axis.getTickLabelStyle().setVisible(false);
         assertFalse(axis.isTickLabelsVisible());
-        axis.setTickLabelsVisible(true);
+        axis.getTickLabelStyle().setVisible(true);
     }
 
     @Test
@@ -299,17 +311,17 @@ class AbstractAxisParameterTests {
         assertEquals(20, axis.getMinorTickLength());
 
         assertTrue(axis.isMinorTickVisible());
-        axis.setMinorTickVisible(false);
+        axis.getMinorTickStyle().setVisible(false);
         assertFalse(axis.isMinorTickVisible());
-        axis.setMinorTickVisible(true);
+        axis.getMinorTickStyle().setVisible(true);
 
         axis.setTickLength(20);
         assertEquals(20, axis.getTickLength());
 
         assertTrue(axis.isTickMarkVisible());
-        axis.setTickMarkVisible(false);
+        axis.getMajorTickStyle().setVisible(false);
         assertFalse(axis.isTickMarkVisible());
-        axis.setTickMarkVisible(true);
+        axis.getMajorTickStyle().setVisible(true);
 
         assertNotNull(axis.getTickMarks());
         assertNotNull(axis.getTickMarkValues());
@@ -326,13 +338,13 @@ class AbstractAxisParameterTests {
         }
 
         @Override
-        public AxisRange getRange() {
-            return null;
+        public void drawAxis() {
+            // deliberately not implemented
         }
 
         @Override
-        public void fireInvalidated() {
-            // deliberately not implemented
+        public AxisRange getRange() {
+            return null;
         }
 
         @Override
@@ -377,7 +389,7 @@ class AbstractAxisParameterTests {
         }
 
         @Override
-        public void invalidateRange(List<Number> data) {
+        public void invalidateRange() {
             // deliberately not implemented
         }
 

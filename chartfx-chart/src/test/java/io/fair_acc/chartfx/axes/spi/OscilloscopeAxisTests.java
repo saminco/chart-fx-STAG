@@ -6,12 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import io.fair_acc.chartfx.axes.spi.format.DefaultTickUnitSupplier;
 import org.junit.jupiter.api.Test;
 
 import io.fair_acc.chartfx.axes.LogAxisType;
 import io.fair_acc.chartfx.axes.TickUnitSupplier;
+import io.fair_acc.chartfx.axes.spi.format.DefaultTickUnitSupplier;
 import io.fair_acc.chartfx.ui.geometry.Side;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * Tests interfaces to OscilloscopeAxis
@@ -85,7 +86,7 @@ public class OscilloscopeAxisTests {
         final OscilloscopeAxis axis = new OscilloscopeAxis("axis title", 0.0, 100.0, 10.0);
 
         assertDoesNotThrow(() -> axis.setSide(Side.BOTTOM));
-        assertDoesNotThrow(axis::updateCachedVariables);
+        assertDoesNotThrow(axis::updateCachedTransforms);
 
         final double zero = axis.getDisplayPosition(axis.getValueForDisplay(0));
         assertEquals(0.0, zero);
@@ -166,18 +167,22 @@ public class OscilloscopeAxisTests {
         axis.setTickUnitSupplier(testTickUnitSupplier);
         assertEquals(testTickUnitSupplier, axis.getTickUnitSupplier());
 
-        assertDoesNotThrow(axis::updateCachedVariables);
+        assertDoesNotThrow(axis::updateCachedTransforms);
 
         assertDoesNotThrow(() -> axis.setSide(Side.BOTTOM));
-        assertDoesNotThrow(axis::updateCachedVariables);
+        assertDoesNotThrow(axis::updateCachedTransforms);
 
         assertDoesNotThrow(() -> axis.setSide(Side.LEFT));
-        assertDoesNotThrow(axis::updateCachedVariables);
+        assertDoesNotThrow(axis::updateCachedTransforms);
 
         assertNotNull(axis.getAxisTransform());
 
         // TODO: make proper sanity checks
-        assertNotNull(axis.calculateMajorTickValues(100, axis.getRange()));
-        assertNotNull(axis.calculateMinorTickValues());
+        var ticks = new DoubleArrayList();
+        axis.calculateMajorTickValues(axis.getRange(), ticks);
+        assertEquals(21, ticks.size());
+        ticks.clear();
+        axis.calculateMinorTickValues(ticks);
+        assertEquals(90, ticks.size());
     }
 }

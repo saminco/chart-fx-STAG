@@ -2,20 +2,15 @@ package io.fair_acc.chartfx.renderer.spi.financial;
 
 import static com.sun.javafx.scene.control.skin.Utils.computeTextWidth;
 
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.*;
 import static io.fair_acc.chartfx.renderer.spi.financial.service.footprint.FootprintRendererAttributes.BID_ASK_VOLUME_FONTS;
 import static io.fair_acc.dataset.DataSet.DIM_X;
 
-import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import io.fair_acc.chartfx.renderer.spi.utils.DefaultRenderColorScheme;
-import javafx.collections.ObservableList;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
@@ -26,10 +21,7 @@ import com.sun.javafx.tk.FontLoader;
 import com.sun.javafx.tk.FontMetrics;
 import com.sun.javafx.tk.Toolkit;
 
-import io.fair_acc.chartfx.Chart;
-import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.Axis;
-import io.fair_acc.chartfx.axes.spi.CategoryAxis;
 import io.fair_acc.chartfx.renderer.Renderer;
 import io.fair_acc.chartfx.renderer.spi.financial.service.OhlcvRendererEpData;
 import io.fair_acc.chartfx.renderer.spi.financial.service.RendererPaintAfterEP;
@@ -37,12 +29,12 @@ import io.fair_acc.chartfx.renderer.spi.financial.service.RendererPaintAfterEPAw
 import io.fair_acc.chartfx.renderer.spi.financial.service.footprint.FootprintRendererAttributes;
 import io.fair_acc.chartfx.renderer.spi.financial.service.footprint.NbColumnColorGroup;
 import io.fair_acc.chartfx.renderer.spi.financial.service.footprint.NbColumnColorGroup.FontColor;
-import io.fair_acc.chartfx.utils.StyleParser;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.StyleUtil;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.spi.financial.api.attrs.AttributeModelAware;
 import io.fair_acc.dataset.spi.financial.api.ohlcv.IOhlcvItem;
 import io.fair_acc.dataset.spi.financial.api.ohlcv.IOhlcvItemAware;
-import io.fair_acc.dataset.utils.ProcessingProfiler;
 
 /**
  * Footprint Chart Renderer
@@ -77,13 +69,13 @@ public class FootprintRenderer extends AbstractFinancialRenderer<FootprintRender
     private AttributeModelAware attrs;
     private IOhlcvItemAware itemAware;
     private boolean isEpAvailable;
-    private Color pocColor;
-    private Color footprintDefaultFontColor;
-    private Color footprintCrossLineColor;
-    private Color footprintBoxLongColor;
-    private Color fooprintBoxShortColor;
-    private Color footprintVolumeLongColor;
-    private Color footprintVolumeShortColor;
+    private Paint pocColor;
+    private Paint footprintDefaultFontColor;
+    private Paint footprintCrossLineColor;
+    private Paint footprintBoxLongColor;
+    private Paint fooprintBoxShortColor;
+    private Paint footprintVolumeLongColor;
+    private Paint footprintVolumeShortColor;
     private double[] distances;
     private int iMin;
     private int iMax;
@@ -99,6 +91,7 @@ public class FootprintRenderer extends AbstractFinancialRenderer<FootprintRender
     protected List<RendererPaintAfterEP> paintAfterEPS = new ArrayList<>();
 
     public FootprintRenderer(IFootprintRenderedAPI footprintRenderedApi, boolean paintVolume, boolean paintPoc, boolean paintPullbackColumn) {
+        StyleUtil.addStyles(this, "footprint");
         this.footprintRenderedApi = footprintRenderedApi;
         this.footprintAttrs = footprintRenderedApi.getFootprintAttributes();
         this.paintVolume = paintVolume;
@@ -125,14 +118,15 @@ public class FootprintRenderer extends AbstractFinancialRenderer<FootprintRender
     }
 
     @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        final Canvas canvas = new Canvas(width, height);
+    public boolean drawLegendSymbol(final DataSetNode dataSet, final Canvas canvas) {
+        final int width = (int) canvas.getWidth();
+        final int height = (int) canvas.getHeight();
         final GraphicsContext gc = canvas.getGraphicsContext2D();
-        final String style = dataSet.getStyle();
 
         gc.save();
-        Color candleLongColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_LONG_COLOR, Color.GREEN);
-        Color candleShortColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_SHORT_COLOR, Color.RED);
+        final FinancialDataSetNode style = (FinancialDataSetNode) dataSet;
+        var candleLongColor = style.getCandleLongColor();
+        var candleShortColor = style.getCandleShortColor();
 
         gc.setFill(candleLongColor);
         gc.setStroke(candleLongColor);
@@ -147,7 +141,7 @@ public class FootprintRenderer extends AbstractFinancialRenderer<FootprintRender
         gc.strokeLine(x, 1, x, height - 3.0);
         gc.restore();
 
-        return canvas;
+        return true;
     }
 
     @Override
@@ -156,133 +150,96 @@ public class FootprintRenderer extends AbstractFinancialRenderer<FootprintRender
     }
 
     @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset,
-            final ObservableList<DataSet> datasets) {
-        if (!(chart instanceof XYChart)) {
-            throw new InvalidParameterException(
-                    "must be derivative of XYChart for renderer - " + this.getClass().getSimpleName());
-        }
-        final XYChart xyChart = (XYChart) chart;
-
-        // make local copy and add renderer specific data sets
-        final List<DataSet> localDataSetList = new ArrayList<>(datasets);
-        localDataSetList.addAll(super.getDatasets());
-
-        long start = 0;
-        if (ProcessingProfiler.getDebugState()) {
-            start = ProcessingProfiler.getTimeStamp();
+    protected void render(GraphicsContext gc, DataSet ds, DataSetNode styleNode) {
+        if (ds.getDimension() < 7) {
+            return;
         }
 
-        final Axis xAxis = xyChart.getXAxis();
-        final Axis yAxis = xyChart.getYAxis();
+        attrs = null;
+        if (ds instanceof AttributeModelAware) {
+            attrs = (AttributeModelAware) ds;
+        }
+        itemAware = (IOhlcvItemAware) ds;
+        isEpAvailable = !paintAfterEPS.isEmpty() || paintBarMarker != null;
 
-        final double xAxisWidth = xAxis.getWidth();
-        final double xmin = xAxis.getValueForDisplay(0);
-        final double xmax = xAxis.getValueForDisplay(xAxisWidth);
-        int index = 0;
+        gc.save();
 
-        for (final DataSet ds : localDataSetList) {
-            if (ds.getDimension() < 7)
-                continue;
-            final int lindex = index;
+        // default styling level
+        FinancialDataSetNode style = (FinancialDataSetNode) styleNode;
+        gc.setLineWidth(style.getLineWidth());
+        gc.setLineDashes(style.getLineDashes());
 
-            ds.lock().readLockGuardOptimistic(() -> {
-                // update categories in case of category axes for the first (index == '0') indexed data set
-                if (lindex == 0 && xyChart.getXAxis() instanceof CategoryAxis) {
-                    final CategoryAxis axis = (CategoryAxis) xyChart.getXAxis();
-                    axis.updateCategories(ds);
-                }
-                attrs = null;
-                if (ds instanceof AttributeModelAware) {
-                    attrs = (AttributeModelAware) ds;
-                }
-                itemAware = (IOhlcvItemAware) ds;
-                isEpAvailable = !paintAfterEPS.isEmpty() || paintBarMarker != null;
+        // footprint settings
+        Font basicFontTemplate = footprintAttrs.getRequiredAttribute(BID_ASK_VOLUME_FONTS)[1];
+        Font selectedFontTemplate = footprintAttrs.getRequiredAttribute(BID_ASK_VOLUME_FONTS)[2];
 
-                gc.save();
-                // default styling level
-                String style = ds.getStyle();
-                DefaultRenderColorScheme.setLineScheme(gc, style, lindex);
-                DefaultRenderColorScheme.setGraphicsContextAttributes(gc, style);
+        // financial styling level
+        pocColor = style.getFootprintPocColor();
+        footprintDefaultFontColor = style.getFootprintDefaultFontColor();
+        footprintCrossLineColor = style.getFootprintCrossLineColor();
+        footprintBoxLongColor = style.getFootprintLongColor();
+        fooprintBoxShortColor = style.getFootprintShortColor();
+        footprintVolumeLongColor = style.getFootprintVolumeLongColor();
+        footprintVolumeShortColor = style.getFootprintVolumeShortColor();
+        double barWidthPercent = style.getBarWidthPercent();
+        double positionPaintMainRatio = style.getPositionPaintMainRatio();
 
-                // footprint settings
-                Font basicFontTemplate = footprintAttrs.getRequiredAttribute(BID_ASK_VOLUME_FONTS)[1];
-                Font selectedFontTemplate = footprintAttrs.getRequiredAttribute(BID_ASK_VOLUME_FONTS)[2];
+        if (ds.getDataCount() > 0) {
+            iMin = ds.getIndex(DIM_X, xMin);
+            if (iMin < 0)
+                iMin = 0;
+            iMax = Math.min(ds.getIndex(DIM_X, xMax) + 1, ds.getDataCount());
 
-                // financial styling level
-                pocColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_POC_COLOR, Color.rgb(255, 255, 0));
-                footprintDefaultFontColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_DEFAULT_FONT_COLOR, Color.rgb(255, 255, 255, 0.58));
-                footprintCrossLineColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_CROSS_LINE_COLOR, Color.GRAY);
-                footprintBoxLongColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_LONG_COLOR, Color.GREEN);
-                fooprintBoxShortColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_SHORT_COLOR, Color.RED);
-                footprintVolumeLongColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_VOLUME_LONG_COLOR, Color.rgb(139, 199, 194, 0.2));
-                footprintVolumeShortColor = StyleParser.getColorPropertyValue(style, DATASET_FOOTPRINT_VOLUME_SHORT_COLOR, Color.rgb(235, 160, 159, 0.2));
-                double barWidthPercent = StyleParser.getFloatingDecimalPropertyValue(style, DATASET_FOOTPRINT_BAR_WIDTH_PERCENTAGE, 0.5d);
-                double positionPaintMainRatio = StyleParser.getFloatingDecimalPropertyValue(style, DATASET_FOOTPRINT_PAINT_MAIN_RATIO, 5.157d);
-
-                if (ds.getDataCount() > 0) {
-                    iMin = ds.getIndex(DIM_X, xmin);
-                    if (iMin < 0)
-                        iMin = 0;
-                    iMax = Math.min(ds.getIndex(DIM_X, xmax) + 1, ds.getDataCount());
-
-                    distances = null;
-                    double minRequiredWidth = 0.0;
-                    if (lindex == 0) {
-                        distances = findAreaDistances(findAreaDistances, ds, xAxis, yAxis, xmin, xmax);
-                        minRequiredWidth = distances[0];
-                    }
-                    localBarWidth = minRequiredWidth * barWidthPercent;
-                    barWidthHalf = localBarWidth / 2.0;
-                    ratio = Math.pow(localBarWidth, 0.25) * positionPaintMainRatio;
-
-                    // calculate ratio depended attributes
-                    basicFont = getFontWithRatio(basicFontTemplate, ratio);
-                    selectedFont = getFontWithRatio(selectedFontTemplate, ratio);
-                    fontGap = getFontGap(5.0, ratio);
-                    basicGap = getFontGap(1.0, ratio);
-
-                    FontMetrics metricsBasicFont = getFontMetrics(basicFont);
-                    heightText = metricsBasicFont.getLeading() + metricsBasicFont.getAscent();
-
-                    for (int i = iMin; i < iMax; i++) {
-                        double x0 = xAxis.getDisplayPosition(ds.get(DIM_X, i));
-                        // get all additional information for footprints
-                        IOhlcvItem ohlcvItem = itemAware.getItem(i);
-                        IOhlcvItem lastOhlcvItem = itemAware.getLastItem();
-                        boolean isLastBar = lastOhlcvItem == null || lastOhlcvItem.getTimeStamp().equals(ohlcvItem.getTimeStamp());
-                        if (!footprintRenderedApi.isFootprintAvailable(ohlcvItem)) {
-                            continue;
-                        }
-                        synchronized (footprintRenderedApi.getLock(ohlcvItem)) {
-                            drawFootprintItem(gc, yAxis, ds, i, x0, ohlcvItem, isEpAvailable, isLastBar, paintVolume);
-
-                            if (isLastBar && paintPullbackColumn) {
-                                IOhlcvItem pullbackColumn = footprintRenderedApi.getPullbackColumn(ohlcvItem);
-                                if (pullbackColumn != null) {
-                                    x0 = x0 + localBarWidth + barWidthHalf;
-                                    drawFootprintItem(gc, yAxis, ds, i, x0, pullbackColumn, false, true, false);
-                                }
-                            }
-                        }
-                    }
-                }
-                gc.restore();
-            });
-            // possibility to re-arrange y-axis by min/max of dataset (after paint)
-            if (computeLocalRange()) {
-                applyLocalYRange(ds, yAxis, xmin, xmax);
+            distances = null;
+            double minRequiredWidth = 0.0;
+            if (styleNode.getLocalIndex() == 0) {
+                distances = findAreaDistances(findAreaDistances, ds, xAxis, yAxis, xMin, xMax);
+                minRequiredWidth = distances[0];
             }
-            index++;
-        }
-        if (ProcessingProfiler.getDebugState()) {
-            ProcessingProfiler.getTimeDiff(start);
-        }
+            localBarWidth = minRequiredWidth * barWidthPercent;
+            barWidthHalf = localBarWidth / 2.0;
+            ratio = Math.pow(localBarWidth, 0.25) * positionPaintMainRatio;
 
-        return localDataSetList;
+            // calculate ratio depended attributes
+            basicFont = getFontWithRatio(basicFontTemplate, ratio);
+            selectedFont = getFontWithRatio(selectedFontTemplate, ratio);
+            fontGap = getFontGap(5.0, ratio);
+            basicGap = getFontGap(1.0, ratio);
+
+            FontMetrics metricsBasicFont = getFontMetrics(basicFont);
+            heightText = metricsBasicFont.getLeading() + metricsBasicFont.getAscent();
+
+            for (int i = iMin; i < iMax; i++) {
+                double x0 = xAxis.getDisplayPosition(ds.get(DIM_X, i));
+                // get all additional information for footprints
+                IOhlcvItem ohlcvItem = itemAware.getItem(i);
+                IOhlcvItem lastOhlcvItem = itemAware.getLastItem();
+                boolean isLastBar = lastOhlcvItem == null || lastOhlcvItem.getTimeStamp().equals(ohlcvItem.getTimeStamp());
+                if (!footprintRenderedApi.isFootprintAvailable(ohlcvItem)) {
+                    continue;
+                }
+                synchronized (footprintRenderedApi.getLock(ohlcvItem)) {
+                    drawFootprintItem(gc, yAxis, style, ds, i, x0, ohlcvItem, isEpAvailable, isLastBar, paintVolume);
+
+                    if (isLastBar && paintPullbackColumn) {
+                        IOhlcvItem pullbackColumn = footprintRenderedApi.getPullbackColumn(ohlcvItem);
+                        if (pullbackColumn != null) {
+                            x0 = x0 + localBarWidth + barWidthHalf;
+                            drawFootprintItem(gc, yAxis, style, ds, i, x0, pullbackColumn, false, true, false);
+                        }
+                    }
+                }
+            }
+        }
+        gc.restore();
+
+        // possibility to re-arrange y-axis by min/max of dataset (after paint)
+        if (computeLocalRange()) {
+            applyLocalYRange(ds, yAxis, xMin, xMax);
+        }
     }
 
-    private void drawFootprintItem(GraphicsContext gc, Axis yAxis, DataSet ds, int i,
+    private void drawFootprintItem(GraphicsContext gc, Axis yAxis, FinancialDataSetNode style, DataSet ds, int i,
             double x0, IOhlcvItem ohlcvItem, boolean isEpAvailable, boolean isLastBar, boolean paintVolume) {
         double yOpen = yAxis.getDisplayPosition(ohlcvItem.getOpen());
         double yHigh = yAxis.getDisplayPosition(ohlcvItem.getHigh());
@@ -305,6 +262,7 @@ public class FootprintRenderer extends AbstractFinancialRenderer<FootprintRender
             data = new OhlcvRendererEpData();
             data.gc = gc;
             data.ds = ds;
+            data.style = style;
             data.attrs = attrs;
             data.ohlcvItemAware = itemAware;
             data.ohlcvItem = ohlcvItem;

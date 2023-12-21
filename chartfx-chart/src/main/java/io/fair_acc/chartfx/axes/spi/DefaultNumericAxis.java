@@ -1,10 +1,5 @@
 package io.fair_acc.chartfx.axes.spi;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -20,6 +15,8 @@ import io.fair_acc.chartfx.axes.TickUnitSupplier;
 import io.fair_acc.chartfx.axes.spi.transforms.DefaultAxisTransform;
 import io.fair_acc.chartfx.axes.spi.transforms.LogarithmicAxisTransform;
 import io.fair_acc.chartfx.axes.spi.transforms.LogarithmicTimeAxisTransform;
+import io.fair_acc.chartfx.utils.PropUtil;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * A axis class that plots a range of numbers with major tick marks every "tickUnit". You can use any Number type with
@@ -47,23 +44,14 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
     private transient AxisTransform axisTransform = linearTransform;
     protected boolean isUpdating;
 
-    private final transient BooleanProperty forceZeroInRange = new SimpleBooleanProperty(this, "forceZeroInRange", false) {
-        @Override
-        protected void invalidated() {
-            if (isAutoRanging() || isAutoGrowRanging()) {
-                invalidate();
-                requestAxisLayout();
-            }
-        }
-    };
+    private final transient BooleanProperty forceZeroInRange = PropUtil.createBooleanProperty(this, "forceZeroInRange", false, invalidateAxisRange);
 
     protected boolean isLogAxis = false; // internal use (for performance reason
 
-    private final transient BooleanProperty logAxis = new SimpleBooleanProperty(this, "logAxis", isLogAxis) {
-        @Override
-        protected void invalidated() {
-            isLogAxis = get();
-
+    private final transient BooleanProperty logAxis = new SimpleBooleanProperty(this, "logAxis", isLogAxis);
+    {
+        logAxis.addListener((bean, oldVal, newVal) -> {
+            isLogAxis = newVal;
             if (isLogAxis) {
                 if (DefaultNumericAxis.this.isTimeAxis()) {
                     axisTransform = logTimeTransform;
@@ -77,9 +65,6 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
                     setMin(DefaultNumericAxis.DEFAULT_LOG_MIN_VALUE);
                     isUpdating = false;
                 }
-
-                invalidate();
-                requestLayout();
             } else {
                 axisTransform = linearTransform;
                 if (DefaultNumericAxis.this.isTimeAxis()) {
@@ -89,12 +74,9 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
                 }
             }
 
-            if (isAutoRanging() || isAutoGrowRanging()) {
-                invalidate();
-            }
-            requestAxisLayout();
-        }
-    };
+            invalidateAxisRange.run();
+        });
+    }
 
     /**
      * Creates an {@link #autoRangingProperty() auto-ranging} Axis.
@@ -342,8 +324,7 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
      */
     public void setLogarithmBase(final double value) {
         logarithmBaseProperty().set(value);
-        invalidate();
-        requestAxisLayout();
+        invalidateAxisRange.run();
     }
 
     /**
@@ -380,7 +361,7 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
             final double valueLogOffset = axisTransform.forward(value) - cache.lowerBoundLog;
 
             if (cache.isVerticalAxis) {
-                return cache.axisHeight - valueLogOffset * cache.logScaleLengthInv;
+                return cache.axisLength - valueLogOffset * cache.logScaleLengthInv;
             }
             return valueLogOffset * cache.logScaleLengthInv;
         }
@@ -393,10 +374,10 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
     private double getValueForDisplayImpl(final double displayPosition) {
         if (isLogAxis) {
             if (cache.isVerticalAxis) {
-                final double height = cache.axisHeight;
-                return axisTransform.backward(cache.lowerBoundLog + (height - displayPosition) / height * cache.logScaleLength);
+                final double length = cache.axisLength;
+                return axisTransform.backward(cache.lowerBoundLog + (length - displayPosition) / length * cache.logScaleLength);
             }
-            return axisTransform.backward(cache.lowerBoundLog + displayPosition / cache.axisWidth * cache.logScaleLength);
+            return axisTransform.backward(cache.lowerBoundLog + displayPosition / cache.axisLength * cache.logScaleLength);
         }
 
         return cache.localCurrentLowerBound + (displayPosition - cache.localOffset) / cache.localScale;
@@ -425,24 +406,23 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
     }
 
     @Override
-    protected List<Double> calculateMajorTickValues(final double axisLength, final AxisRange axisRange) {
-        final List<Double> tickValues = new ArrayList<>(getMaxMajorTickLabelCount());
+    protected void calculateMajorTickValues(final AxisRange axisRange, DoubleArrayList tickValues) {
         if (isLogAxis) {
             if (axisRange.getLowerBound() >= axisRange.getUpperBound()) {
-                return Arrays.asList(axisRange.getLowerBound()); // NOPMD NOSONAR -- cannot use singletonList since list needs to remain modifiable
+                tickValues.add(axisRange.getLowerBound());
+                return;
             }
             double exp = Math.ceil(axisTransform.forward(axisRange.getLowerBound()));
-            for (double tickValue = axisTransform.backward(exp); tickValue <= axisRange
-                                                                                      .getUpperBound();
+            for (double tickValue = axisTransform.backward(exp); tickValue <= axisRange.getUpperBound();
                     tickValue = axisTransform.backward(++exp)) {
                 tickValues.add(tickValue);
             }
-
-            return tickValues;
+            return;
         }
 
         if (axisRange.getLowerBound() == axisRange.getUpperBound() || axisRange.getTickUnit() <= 0) {
-            return Arrays.asList(axisRange.getLowerBound()); // NOPMD NOSONAR -- cannot use singletonList since list needs to remain modifiable
+            tickValues.add(axisRange.getLowerBound());
+            return;
         }
 
         final double firstTick = DefaultNumericAxis.computeFistMajorTick(axisRange.getLowerBound(),
@@ -451,8 +431,9 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.atDebug().log("major ticks numerically not resolvable");
             }
-            return tickValues;
+            return;
         }
+
         final int maxTickCount = getMaxMajorTickLabelCount();
         for (double major = firstTick; (major <= axisRange.getUpperBound() && tickValues.size() <= maxTickCount); major += axisRange.getTickUnit()) {
             if (tickValues.size() > getMaxMajorTickLabelCount()) {
@@ -460,16 +441,14 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
             }
             tickValues.add(major);
         }
-        return tickValues;
     }
 
     @Override
-    protected List<Double> calculateMinorTickValues() {
+    protected void calculateMinorTickValues(DoubleArrayList newMinorTickMarks) {
         if (getMinorTickCount() <= 0 || getTickUnit() <= 0) {
-            return Collections.emptyList();
+            return;
         }
 
-        final List<Double> newMinorTickMarks = new ArrayList<>();
         final double lowerBound = getMin();
         final double upperBound = getMax();
         final double majorUnit = getTickUnit();
@@ -515,7 +494,7 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
                 majorTickCount++;
             }
         }
-        return newMinorTickMarks;
+        return;
     }
 
     @Override
@@ -556,7 +535,8 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
     }
 
     @Override
-    protected void updateCachedVariables() {
+    public void updateCachedTransforms() {
+        super.updateCachedTransforms();
         if (cache == null) { // lgtm [java/useless-null-check] NOPMD NOSONAR -- called from static initializer
             return;
         }
@@ -600,12 +580,10 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
         protected double logScaleLength;
         protected double logScaleLengthInv;
         protected boolean isVerticalAxis;
-        protected double axisWidth;
-        protected double axisHeight;
+        protected double axisLength;
 
         private void updateCachedAxisVariables() {
-            axisWidth = getWidth();
-            axisHeight = getHeight();
+            axisLength = getLength();
             localCurrentLowerBound = DefaultNumericAxis.super.getMin();
             localCurrentUpperBound = DefaultNumericAxis.super.getMax();
 
@@ -624,11 +602,8 @@ public class DefaultNumericAxis extends AbstractAxis implements Axis {
                 isVerticalAxis = getSide().isVertical();
             }
 
-            if (isVerticalAxis) {
-                logScaleLengthInv = axisHeight / logScaleLength;
-            } else {
-                logScaleLengthInv = axisWidth / logScaleLength;
-            }
+            logScaleLengthInv = axisLength / logScaleLength;
+            offset = axisLength;
 
             offset = isVerticalAxis ? getHeight() : getWidth();
         }

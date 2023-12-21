@@ -4,10 +4,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 
-import io.fair_acc.dataset.event.AddedDataEvent;
-import io.fair_acc.dataset.event.UpdatedDataEvent;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSet2D;
+import io.fair_acc.dataset.events.ChartBits;
 
 /**
  * @author braeun
@@ -38,12 +37,12 @@ public class FragmentedDataSet extends AbstractDataSet<FragmentedDataSet> implem
             getAxisDescription(DIM_Y).add(set.getAxisDescription(DIM_Y).getMax());
             getAxisDescription(DIM_Y).add(set.getAxisDescription(DIM_Y).getMin());
         });
-        fireInvalidated(new AddedDataEvent(this, "added data set"));
+        fireInvalidated(ChartBits.DataSetDataAdded);
     }
 
     /**
      * adds new custom x and y array values (internally generates a new DataSet)
-     * 
+     *
      * @param xValues new X coordinates
      * @param yValues new Y coordinates
      */
@@ -63,7 +62,7 @@ public class FragmentedDataSet extends AbstractDataSet<FragmentedDataSet> implem
         lock().writeLockGuard(() -> {
             dataCount = 0;
             list.clear();
-            fireInvalidated(new UpdatedDataEvent(this, "clear()"));
+            fireInvalidated(ChartBits.DataSetDataRemoved);
         });
     }
 
@@ -133,6 +132,7 @@ public class FragmentedDataSet extends AbstractDataSet<FragmentedDataSet> implem
             copyDataLabelsAndStyles(other, copy);
             copyAxisDescription(other);
         }));
-        return fireInvalidated(new UpdatedDataEvent(this, "set(DataSet, boolean=" + copy + ")"));
+        fireInvalidated(ChartBits.DataSetData);
+        return getThis();
     }
 }

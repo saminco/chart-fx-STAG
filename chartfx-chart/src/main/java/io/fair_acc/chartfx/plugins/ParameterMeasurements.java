@@ -13,6 +13,7 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import io.fair_acc.chartfx.plugins.measurements.AbstractChartMeasurement;
 import io.fair_acc.chartfx.plugins.measurements.DataSetMeasurements;
 import io.fair_acc.chartfx.plugins.measurements.SimpleMeasurements;
+import io.fair_acc.chartfx.plugins.measurements.TrendingMeasurements;
 import io.fair_acc.chartfx.ui.TilingPane.Layout;
 import io.fair_acc.chartfx.ui.geometry.Side;
 import io.fair_acc.chartfx.viewer.DataView;
@@ -76,7 +77,7 @@ public class ParameterMeasurements extends ChartPlugin {
                 oldChart.getToolBar().getChildren().remove(parameterMenu);
 
                 // remove measurement display pane
-                oldChart.getMeasurementBar(side).getChildren().remove(dataView);
+                oldChart.getMeasurementPane().remove(dataView);
             }
 
             if (newChart != null) {
@@ -86,7 +87,7 @@ public class ParameterMeasurements extends ChartPlugin {
                 }
 
                 // add measurement display pane
-                newChart.getMeasurementBar(side).getChildren().add(dataView);
+                newChart.getMeasurementPane().addSide(side, dataView);
             }
         });
 
@@ -141,6 +142,23 @@ public class ParameterMeasurements extends ChartPlugin {
                 final MenuItem newMeasurement = new MenuItem(measType.getName()); // NOPMD dynamic (but finite) menu generation
                 newMeasurement.setId("ParameterMeasurements::newMeasurement::" + measType.toString()); // N.B. not a unique name but for testing this suffices
                 newMeasurement.setOnAction(evt -> new DataSetMeasurements(this, measType).initialize()); // NOPMD
+                newCategory.getItems().addAll(newMeasurement);
+            }
+        }
+
+        // loop through TrendingMeasurements categories
+        for (final TrendingMeasurements.MeasurementCategory category : TrendingMeasurements.MeasurementCategory.values()) {
+            final Menu newCategory = new Menu(category.getName()); // NOPMD dynamic (but finite) menu generation
+            measurementMenu.getItems().addAll(newCategory);
+
+            // loop through measurements within categories
+            for (final TrendingMeasurements.MeasurementType measType : TrendingMeasurements.MeasurementType.values()) {
+                if (measType.getCategory() != category) {
+                    continue;
+                }
+                final MenuItem newMeasurement = new MenuItem(measType.getName()); // NOPMD dynamic (but finite) menu generation
+                newMeasurement.setId("ParameterMeasurements::newMeasurement::" + measType.toString()); // N.B. not a unique name but for testing this suffices
+                newMeasurement.setOnAction(evt -> new TrendingMeasurements(this, measType).initialize()); // NOPMD
                 newCategory.getItems().addAll(newMeasurement);
             }
         }

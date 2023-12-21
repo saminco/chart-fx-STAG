@@ -33,7 +33,7 @@ import io.fair_acc.dataset.testdata.spi.CosineFunction;
 
 /**
  * Test the screenshot plugin
- * 
+ *
  * @author Alexander Krimm
  */
 @ExtendWith(ApplicationExtension.class)
@@ -140,13 +140,13 @@ class ScreenshotTest {
             assertEquals("testDataSet_4.5_4.500000e-06.png", screenshotPlugin.generateScreenshotName());
             screenshotPlugin.setPattern("");
             chart.setTitle("");
-            chart.setTitleSide(Side.RIGHT);
-            chart.setTitlePaint(Color.BLUE);
+            chart.getTitleLabel().setSide(Side.RIGHT);
+            chart.getTitleLabel().setTextFill(Color.BLUE);
 
-            assertEquals("testDataSet", screenshotPlugin.generateScreenshotName()); //first data set name
+            assertEquals("testDataSet", screenshotPlugin.generateScreenshotName()); // first data set name
             chart.getDatasets().clear();
             chart.setId("");
-            assertEquals("UnknownChart", screenshotPlugin.generateScreenshotName()); //first data set name
+            assertEquals("UnknownChart", screenshotPlugin.generateScreenshotName()); // first data set name
         }));
     }
 }

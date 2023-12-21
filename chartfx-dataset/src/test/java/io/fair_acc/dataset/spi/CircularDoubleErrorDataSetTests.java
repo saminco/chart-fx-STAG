@@ -5,15 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.fair_acc.dataset.AxisDescription;
-import io.fair_acc.dataset.DataSet;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import io.fair_acc.dataset.AxisDescription;
+import io.fair_acc.dataset.DataSet;
 
 /**
  * Checks for CircularDoubleDataSet interfaces and constructors.
  * TODO: add tests for Listeners
- * 
+ *
  * @author Alexander Krimm
  */
 class CircularDoubleErrorDataSetTests {
@@ -88,17 +89,17 @@ class CircularDoubleErrorDataSetTests {
         assertAxisDescriptionRange(yAxisDescription, Double.NaN, Double.NaN);
 
         dataSet.add(1., 2., 0, 0);
-
+        dataSet.recomputeLimits();
         assertAxisDescriptionRange(xAxisDescription, 1., 1.);
         assertAxisDescriptionRange(yAxisDescription, 2., 2.);
 
         dataSet.add(2., 3., 0, 0);
-
+        dataSet.recomputeLimits();
         assertAxisDescriptionRange(xAxisDescription, 1., 2.);
         assertAxisDescriptionRange(yAxisDescription, 2., 3.);
 
         dataSet.add(3., -1., 0, 0);
-
+        dataSet.recomputeLimits();
         assertAxisDescriptionRange(xAxisDescription, 1., 3.);
         assertAxisDescriptionRange(yAxisDescription, -1., 3.);
     }
@@ -114,6 +115,7 @@ class CircularDoubleErrorDataSetTests {
                 new double[] { 10., 20. }, //
                 new double[] { 1., 2. }, //
                 new double[] { 3., 4. });
+        dataSet.recomputeLimits();
 
         assertAxisDescriptionRange(xAxisDescription, 1., 2.);
         assertAxisDescriptionRange(yAxisDescription, 9., 24.);
@@ -123,6 +125,7 @@ class CircularDoubleErrorDataSetTests {
                 new double[] { 30., 40. }, //
                 new double[] { 1., 2. }, //
                 new double[] { 3., 4. });
+        dataSet.recomputeLimits();
 
         assertAxisDescriptionRange(xAxisDescription, 1., 4.);
         assertAxisDescriptionRange(yAxisDescription, 9., 44.);
@@ -132,6 +135,7 @@ class CircularDoubleErrorDataSetTests {
                 new double[] { -50., -60. }, //
                 new double[] { 1., 2. }, //
                 new double[] { 3., 4. });
+        dataSet.recomputeLimits();
 
         // size of five, the first values gets evicted!
         assertAxisDescriptionRange(xAxisDescription, 2., 6.);
@@ -150,18 +154,21 @@ class CircularDoubleErrorDataSetTests {
         assertEquals(Double.NaN, yAxisDescription.getMax());
 
         dataSet.add(1, 1, 0.1, 0.1);
+        dataSet.recomputeLimits();
         assertEquals(1, xAxisDescription.getMin());
         assertEquals(1, xAxisDescription.getMax());
         assertEquals(0.9, yAxisDescription.getMin());
         assertEquals(1.1, yAxisDescription.getMax());
 
         dataSet.add(2, 1, 0.1, 0.1);
+        dataSet.recomputeLimits();
         assertEquals(1, xAxisDescription.getMin());
         assertEquals(2, xAxisDescription.getMax());
         assertEquals(0.9, yAxisDescription.getMin());
         assertEquals(1.1, yAxisDescription.getMax());
 
         dataSet.add(2, 2, 0.1, 0.1);
+        dataSet.recomputeLimits();
         assertEquals(1, xAxisDescription.getMin());
         assertEquals(2, xAxisDescription.getMax());
         assertEquals(0.9, yAxisDescription.getMin());

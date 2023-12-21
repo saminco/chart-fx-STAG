@@ -1,17 +1,18 @@
 package io.fair_acc.dataset.locks;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
 
+import io.fair_acc.bench.DurationMeasure;
+import io.fair_acc.bench.MeasurementRecorder;
 import io.fair_acc.dataset.DataSet;
 
 /**
  * A Simple ReadWriteLock for the DataSet interface and its fluent-design approach Some implementation recommendation:
  * write lock guards behave the same as ReentrantLock with the additional functionality, that a <code>writeLock()</code>
- * and subsequent <code>writeUnLock()</code> mute and, respectively, un-mute the given DataSet's auto-notification
+ * and subsequent <code>writeUnLock()</code> mute and, respectively, unmute the given DataSet's auto-notification
  * states, e.g. example:
  *
  * <pre>
@@ -56,7 +57,6 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
     private final AtomicLong writerLockedByThreadId = new AtomicLong(-1L);
     private final AtomicInteger readerCount = new AtomicInteger(0);
     private final AtomicInteger writerCount = new AtomicInteger(0);
-    private final transient AtomicBoolean autoNotifyState = new AtomicBoolean(true);
     private final transient D dataSet;
 
     /**
@@ -113,6 +113,7 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
 
     @Override
     public D readLock() {
+        benchReadLock.start();
         if (lastReadStamp.get() == -1 && readerCount.get() == 0) {
             // first reader needs to acquire a lock to guard against writes
             final long stamp = stampedLock.readLock();
@@ -123,7 +124,7 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
         }
         // other readers just increment the reader lock
         readerCount.getAndIncrement();
-
+        benchReadLock.stop();
         return dataSet;
     }
 
@@ -188,7 +189,7 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
     public D readUnLock() {
         if (readerCount.get() == 1 && lastReadStamp.get() != -1) {
             final long lastReadStampLocal = lastReadStamp.get();
-            //noinspection StatementWithEmptyBody
+            // noinspection StatementWithEmptyBody
             if (lastReadStamp.compareAndExchange(lastReadStampLocal, -1L) != lastReadStampLocal) { // NOPMD NOSONAR - for better logic readability (humans)
                 // already unlocked by another thread
             } else {
@@ -204,32 +205,31 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
 
     @Override
     public D writeLock() {
+        benchWriteLock.start();
         final long callingThreadId = Thread.currentThread().getId();
         if (writerLockedByThreadId.get() != callingThreadId) {
             // new/not matching existing thread holding lock - need to acquire new lock
             long stamp;
             do {
-                //stamp = stampedLock.tryWriteLock()
+                // stamp = stampedLock.tryWriteLock()
                 stamp = stampedLock.writeLock();
             } while (stamp == 0);
             // acquired lock
             writerLockedByThreadId.set(callingThreadId);
             lastWriteStamp.set(stamp);
-            autoNotifyState.set(dataSet.autoNotification().getAndSet(false));
         }
         // we acquired a new lock or are already owner of a previously acquired lock
         writerCount.incrementAndGet();
+        benchWriteLock.stop();
         return dataSet;
     }
 
     @Override
     public D writeLockGuard(final Runnable writing) { // NOPMD -- runnable not used in a thread context
         writeLock();
-        final boolean oldAutoNotificationState = dataSet.autoNotification().getAndSet(false);
         try {
             writing.run();
         } finally {
-            dataSet.autoNotification().set(oldAutoNotificationState);
             writeUnLock();
         }
         return dataSet;
@@ -238,13 +238,10 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
     @Override
     public <R> R writeLockGuard(final Supplier<R> writing) {
         writeLock();
-        final boolean oldAutoNotificationState = dataSet.autoNotification().getAndSet(false);
-
         R result;
         try {
             result = writing.get();
         } finally {
-            dataSet.autoNotification().set(oldAutoNotificationState);
             writeUnLock();
         }
         return result;
@@ -259,10 +256,18 @@ public class DefaultDataSetLock<D extends DataSet> implements DataSetLock<D> {
             }
 
             // restore present auto-notify state
-            dataSet.autoNotification().set(autoNotifyState.get());
             writerLockedByThreadId.set(-1L);
             stampedLock.unlockWrite(lastWriteStamp.getAndSet(-1L));
         }
         return dataSet;
     }
+
+    @Override
+    public void setRecorder(MeasurementRecorder recorder) {
+        benchReadLock = recorder.newTraceDuration("lock-readLock");
+        benchWriteLock = recorder.newTraceDuration("lock-writeLock");
+    }
+
+    private DurationMeasure benchReadLock = DurationMeasure.DISABLED;
+    private DurationMeasure benchWriteLock = DurationMeasure.DISABLED;
 }

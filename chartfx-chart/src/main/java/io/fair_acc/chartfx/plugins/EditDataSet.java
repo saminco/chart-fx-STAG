@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
+import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
@@ -53,6 +54,7 @@ import io.fair_acc.chartfx.utils.FXUtils;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.EditConstraints;
 import io.fair_acc.dataset.EditableDataSet;
+import io.fair_acc.dataset.events.ChartBits;
 
 /**
  *
@@ -150,6 +152,14 @@ public class EditDataSet extends TableViewer {
             event.consume();
         }
     };
+
+    @Override
+    public void runPostLayout() {
+        super.runPostLayout();
+        if (getChart().getBitState().isDirty(ChartBits.AxisMask | ChartBits.DataSetMask)) {
+            updateMarker();
+        }
+    }
 
     /**
      * Creates an event handler that handles a mouse drag on the node.
@@ -967,16 +977,13 @@ public class EditDataSet extends TableViewer {
             setOnMouseReleased(dragOver);
             setOnMouseDragOver(dragOver);
             // this.setOnMouseExited(dragOver);
-
-            xAxis.addListener(evt -> FXUtils.runFX(() -> this.setCenterX(getX())));
-            yAxis.addListener(evt -> FXUtils.runFX(() -> this.setCenterY(getY())));
-            dataSet.addListener(e -> FXUtils.runFX(this::update));
         }
 
         public void applyDrag(final double deltaX, final double deltaY) {
-            if (!dataSet.isVisible()) {
+            // TODO: replace with dataSetNode.isVisible() - it uses XYChart::getDataSets(), so maybe needs more refactoring
+            /*if (!dataSet.isVisible()) {
                 return;
-            }
+            }*/
 
             double nX = getX();
             double nY = getY();
@@ -1019,9 +1026,10 @@ public class EditDataSet extends TableViewer {
         }
 
         public boolean delete() {
-            if (!dataSet.isVisible()) {
+            // TODO: replace with dataSetNode.isVisible() - it uses XYChart::getDataSets(), so maybe needs more refactoring
+            /*if (!dataSet.isVisible()) {
                 return false;
-            }
+            }*/
 
             final EditConstraints constraints = dataSet.getEditConstraints();
             int index = getIndex();

@@ -1,7 +1,5 @@
 package io.fair_acc.dataset.spi;
 
-import io.fair_acc.dataset.event.UpdateEvent;
-import io.fair_acc.dataset.locks.DataSetLock;
 import io.fair_acc.dataset.DataSetError;
 
 /**
@@ -37,12 +35,6 @@ public abstract class AbstractErrorDataSet<D extends AbstractErrorDataSet<D>> ex
         this.errorType = errorTypes;
     }
 
-    @Override
-    public D fireInvalidated(final UpdateEvent event) {
-        super.fireInvalidated(event);
-        return getThis();
-    }
-
     /**
      * return the DataSetError.ErrorType of the dataset
      *
@@ -57,11 +49,6 @@ public abstract class AbstractErrorDataSet<D extends AbstractErrorDataSet<D>> ex
     @SuppressWarnings("unchecked")
     protected D getThis() {
         return (D) this;
-    }
-
-    @Override
-    public DataSetLock<D> lock() {
-        return (DataSetLock<D>) super.lock();
     }
 
     /**
@@ -104,7 +91,7 @@ public abstract class AbstractErrorDataSet<D extends AbstractErrorDataSet<D>> ex
 
     /**
      * sets the error type of the data set for the given dimension index
-     * 
+     *
      * @param dimIndex the dimension for which to set the ErrorType
      * @param errorType error type to be set
      * @return itself (fluent design)

@@ -8,6 +8,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.ObjectBinding;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Orientation;
 import javafx.scene.Node;
@@ -15,9 +20,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.LinearGradient;
 import javafx.scene.shape.Rectangle;
@@ -38,7 +41,9 @@ import io.fair_acc.chartfx.renderer.spi.hexagon.HexagonMap;
 import io.fair_acc.chartfx.renderer.spi.marchingsquares.GeneralPath;
 import io.fair_acc.chartfx.renderer.spi.marchingsquares.MarchingSquares;
 import io.fair_acc.chartfx.renderer.spi.utils.ColorGradient;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
 import io.fair_acc.chartfx.ui.geometry.Side;
+import io.fair_acc.chartfx.ui.layout.ChartPane;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.GridDataSet;
 import io.fair_acc.dataset.utils.ProcessingProfiler;
@@ -72,8 +77,7 @@ import io.fair_acc.dataset.utils.ProcessingProfiler;
 public class ContourDataSetRenderer extends AbstractContourDataSetRendererParameter<ContourDataSetRenderer> implements Renderer {
     private static final Logger LOGGER = LoggerFactory.getLogger(ContourDataSetRenderer.class);
     private ContourDataSetCache localCache;
-    private Axis zAxis;
-    protected final Rectangle gradientRect = new Rectangle();
+    protected final ColorGradientBar gradientBar = new ColorGradientBar();
 
     private void drawContour(final GraphicsContext gc, final ContourDataSetCache lCache) {
         final double[] levels = new double[getNumberQuantisationLevels()];
@@ -275,11 +279,6 @@ public class ContourDataSetRenderer extends AbstractContourDataSetRendererParame
         ProcessingProfiler.getTimeDiff(start, "drawHexagonMapContour");
     }
 
-    @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        return null; // TODO: implement
-    }
-
     /**
      * @return the instance of this ContourDataSetRenderer.
      */
@@ -288,25 +287,105 @@ public class ContourDataSetRenderer extends AbstractContourDataSetRendererParame
         return this;
     }
 
-    public Axis getZAxis() {
-        final ArrayList<Axis> localAxesList = new ArrayList<>(getAxes());
-        localAxesList.remove(getFirstAxis(Orientation.HORIZONTAL));
-        localAxesList.remove(getFirstAxis(Orientation.VERTICAL));
-        if (localAxesList.isEmpty()) {
-            zAxis = new DefaultNumericAxis("z-Axis");
-            zAxis.setAnimated(false);
-            zAxis.setSide(Side.RIGHT);
-            getAxes().add(zAxis);
-        } else {
-            zAxis = localAxesList.get(0);
-            if (zAxis.getSide() == null) {
-                zAxis.setSide(Side.RIGHT);
+    /**
+     * A rectangular color display that gets rendered next to the axis.
+     * TODO: the layout currently requires the axis to be a child of a ChartPane.
+     * TODO: it might be better to have a specialized ColorGradientAxis?
+     */
+    static class ColorGradientBar extends Rectangle {
+        ColorGradientBar() {
+            colorGradient.addListener(updateListener);
+            axis.addListener((obs, old, newValue) -> {
+                if (old != null)
+                    old.sideProperty().removeListener(updateListener);
+                if (newValue != null)
+                    newValue.sideProperty().addListener(updateListener);
+            });
+            axis.addListener(updateListener);
+            axisNode.addListener((obs, old, newValue) -> {
+                if (old != null)
+                    old.parentProperty().removeListener(updateListener);
+                if (newValue != null)
+                    newValue.parentProperty().addListener(updateListener);
+            });
+        }
+
+        final ChangeListener<Object> updateListener = (obs, old, newValue) -> update();
+
+        void setAxis(Axis axis) {
+            this.axis.set(axis);
+        }
+
+        public void setColorGradient(ColorGradient colorGradient) {
+            this.colorGradient.set(colorGradient);
+        }
+
+        private void update() {
+            // Remove from SceneGraph
+            if (axisNode.get() == null || axisNode.get().getParent() == null) {
+                if (this.getParent() != null) {
+                    ((Pane) getParent()).getChildren().remove(this);
+                }
+                return;
+            }
+            var children = ((ChartPane) axisNode.get().getParent()).getChildren();
+            var side = axis.get().getSide();
+
+            // Render on the side closer to the chart region
+            children.remove(this);
+            ChartPane.setSide(this, side);
+            int axisIndex = children.indexOf(axisNode.get());
+            switch (side) {
+            case BOTTOM:
+            case RIGHT:
+            case CENTER_VER:
+            case CENTER_HOR:
+                children.add(axisIndex, this);
+                break;
+            case TOP:
+            case LEFT:
+                children.add(axisIndex + 1, this);
+                break;
+            }
+
+            // Fill with an appropriate color for the side
+            if (colorGradient.get() != null) {
+                if (side.isHorizontal()) {
+                    setFill(new LinearGradient(0, 0, 1, 0, true, NO_CYCLE, colorGradient.get().getStops()));
+                } else {
+                    setFill(new LinearGradient(0, 1, 0, 0, true, NO_CYCLE, colorGradient.get().getStops()));
+                }
             }
         }
-        // small cosmetic change to have colour gradient at the utmost right
-        // position
-        shiftZAxisToRight();
-        return zAxis;
+
+        @Override
+        public void resize(double width, double height) {
+            // let the layout handle the sizing
+            setWidth(width);
+            setHeight(height);
+        }
+
+        @Override
+        public double prefWidth(double height) {
+            return gradientSize;
+        }
+
+        @Override
+        public double prefHeight(double width) {
+            return gradientSize;
+        }
+
+        final ObjectProperty<Axis> axis = new SimpleObjectProperty<>(null);
+        final ObjectBinding<Node> axisNode = Bindings.createObjectBinding(() -> {
+            if (axis.get() != null && axis.get() instanceof Node) {
+                return (Node) axis.get();
+            }
+            return null;
+        }, axis);
+
+        final ObjectProperty<ColorGradient> colorGradient = new SimpleObjectProperty<>(null);
+
+        private static final double gradientSize = 20;
     }
 
     protected void layoutZAxis(final Axis localZAxis) {
@@ -315,41 +394,8 @@ public class ContourDataSetRenderer extends AbstractContourDataSetRendererParame
         }
         Node zAxisNode = (Node) localZAxis;
         zAxisNode.getProperties().put(Zoomer.ZOOMER_OMIT_AXIS, Boolean.TRUE);
-
-        if (localZAxis.getSide().isHorizontal()) {
-            zAxisNode.setLayoutX(50);
-            gradientRect.setX(0);
-            gradientRect.setWidth(localZAxis.getWidth());
-            gradientRect.setHeight(20);
-            zAxisNode.setLayoutX(0);
-            gradientRect.setFill(new LinearGradient(0, 0, 1, 0, true, NO_CYCLE, getColorGradient().getStops()));
-
-            if (!(zAxisNode.getParent() instanceof VBox)) {
-                return;
-            }
-            final VBox parent = (VBox) zAxisNode.getParent();
-            if (!parent.getChildren().contains(gradientRect)) {
-                parent.getChildren().add(gradientRect);
-            }
-        } else {
-            zAxisNode.setLayoutY(50);
-            gradientRect.setWidth(20);
-            gradientRect.setHeight(localZAxis.getHeight());
-            gradientRect.setFill(new LinearGradient(0, 1, 0, 0, true, NO_CYCLE, getColorGradient().getStops()));
-            gradientRect.setLayoutX(10);
-
-            if (!(zAxisNode.getParent() instanceof HBox)) {
-                return;
-            }
-            final HBox parent = (HBox) zAxisNode.getParent();
-            if (!parent.getChildren().contains(gradientRect)) {
-                parent.getChildren().add(0, gradientRect);
-            }
-        }
-
-        if (localZAxis instanceof Region) {
-            ((Region) zAxisNode).requestLayout();
-        }
+        gradientBar.setColorGradient(getColorGradient());
+        gradientBar.setAxis(localZAxis);
     }
 
     private void paintCanvas(final GraphicsContext gc) {
@@ -357,11 +403,7 @@ public class ContourDataSetRenderer extends AbstractContourDataSetRendererParame
             return;
         }
 
-        final Axis localZAxis = getZAxis();
-        if (localZAxis == null) {
-            return;
-        }
-        final AxisTransform axisTransform = localZAxis.getAxisTransform();
+        final AxisTransform axisTransform = zAxis.getAxisTransform();
         if (axisTransform == null) {
             return;
         }
@@ -386,73 +428,35 @@ public class ContourDataSetRenderer extends AbstractContourDataSetRendererParame
     }
 
     @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset,
-            final ObservableList<DataSet> datasets) {
-        final long start = ProcessingProfiler.getTimeStamp();
-        if (!(chart instanceof XYChart)) {
-            throw new InvalidParameterException("must be derivative of XYChart for renderer - " + this.getClass().getSimpleName());
-        }
-
-        // make local copy and add renderer specific data sets
-        final List<DataSet> localDataSetList = new ArrayList<>(datasets);
-        localDataSetList.addAll(getDatasets());
-
-        // If there are no data sets
-        if (localDataSetList.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        final XYChart xyChart = (XYChart) chart;
-        long mid = ProcessingProfiler.getTimeDiff(start, "init");
-        // N.B. importance of reverse order: start with last index, so that
-        // most(-like) important DataSet is drawn on
-        // top of the others
-
-        List<DataSet> drawnDataSet = new ArrayList<>(localDataSetList.size());
-        for (int dataSetIndex = localDataSetList.size() - 1; dataSetIndex >= 0; dataSetIndex--) {
-            final DataSet dataSet = localDataSetList.get(dataSetIndex);
-            if (!dataSet.isVisible() || !(dataSet instanceof GridDataSet) || dataSet.getDimension() <= 2) {
-                continue; // DataSet not applicable to ContourChartRenderer
-            }
-
-            final boolean result = dataSet.lock().readLockGuard(() -> {
-                long stop = ProcessingProfiler.getTimeDiff(mid, "dataSet.lock()");
-
-                if (dataSet.getDataCount() == 0) {
-                    return false;
-                }
-
-                localCache = new ContourDataSetCache(xyChart, this, dataSet); // NOPMD
-                ProcessingProfiler.getTimeDiff(stop, "updateCachedVariables");
-                return true;
-            });
-
-            if (result) {
-                layoutZAxis(getZAxis());
-                // data reduction algorithm here
-                paintCanvas(gc);
-                drawnDataSet.add(dataSet);
-                localCache.releaseCachedVariables();
-            }
-
-            ProcessingProfiler.getTimeDiff(mid, "finished drawing");
-
-        } // end of 'dataSetIndex' loop
-
-        ProcessingProfiler.getTimeDiff(start);
-
-        return drawnDataSet;
+    public void runPreLayout() {
+        layoutZAxis(zAxis);
     }
 
+    @Override
+    protected void render(GraphicsContext gc, DataSet dataSet, DataSetNode style) {
+        long start = ProcessingProfiler.getTimeStamp();
+        localCache = new ContourDataSetCache(getChart(), this, dataSet); // NOPMD
+        ProcessingProfiler.getTimeDiff(start, "updateCachedVariables");
+
+        // data reduction algorithm here
+        paintCanvas(gc);
+        localCache.releaseCachedVariables();
+        ProcessingProfiler.getTimeDiff(start, "finished drawing");
+    }
+
+    @Override
     public void shiftZAxisToLeft() {
-        gradientRect.toBack();
+        super.shiftZAxisToLeft();
+        gradientBar.toBack();
         if (zAxis instanceof Node) {
             ((Node) zAxis).toBack();
         }
     }
 
+    @Override
     public void shiftZAxisToRight() {
-        gradientRect.toFront();
+        super.shiftZAxisToRight();
+        gradientBar.toFront();
         if (zAxis instanceof Node) {
             ((Node) zAxis).toFront();
         }

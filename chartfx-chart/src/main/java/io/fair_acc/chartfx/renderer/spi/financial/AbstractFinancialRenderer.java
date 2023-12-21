@@ -7,14 +7,15 @@ import java.util.List;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
 
 import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.renderer.Renderer;
-import io.fair_acc.chartfx.renderer.spi.AbstractDataSetManagement;
+import io.fair_acc.chartfx.renderer.spi.AbstractRendererXY;
 import io.fair_acc.chartfx.renderer.spi.financial.service.OhlcvRendererEpData;
 import io.fair_acc.chartfx.renderer.spi.financial.service.PaintBarMarker;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.StyleUtil;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.spi.financial.OhlcvDataSet;
 
@@ -30,7 +31,31 @@ import io.fair_acc.dataset.spi.financial.OhlcvDataSet;
  * @author afischer
  */
 @SuppressWarnings({ "PMD.ExcessiveParameterList" })
-public abstract class AbstractFinancialRenderer<R extends Renderer> extends AbstractDataSetManagement<R> implements Renderer {
+public abstract class AbstractFinancialRenderer<R extends AbstractRendererXY<R>> extends AbstractRendererXY<R> implements Renderer {
+    protected AbstractFinancialRenderer() {
+        StyleUtil.addStyles(this, "financial");
+    }
+
+    protected FinancialDataSetNode createNode(DataSet dataSet) {
+        // Reuse existing nodes when possible
+        for (DataSetNode dataSetNode : getDatasetNodes()) {
+            if (dataSetNode.getDataSet() == dataSet) {
+                return (FinancialDataSetNode) dataSetNode;
+            }
+        }
+        return new FinancialDataSetNode(this, dataSet);
+    }
+
+    @Override
+    public FinancialDataSetNode getStyleableNode(DataSet dataSet) {
+        return (FinancialDataSetNode) super.getStyleableNode(dataSet);
+    }
+
+    @Override
+    public FinancialDataSetNode addDataSet(DataSet dataSet) {
+        return (FinancialDataSetNode) super.addDataSet(dataSet);
+    }
+
     protected PaintBarMarker paintBarMarker;
 
     private final BooleanProperty computeLocalYRange = new SimpleBooleanProperty(this, "computeLocalYRange", true);
@@ -115,7 +140,7 @@ public abstract class AbstractFinancialRenderer<R extends Renderer> extends Abst
      * @param barWidthHalf     half width of bar
      * @param x0               the center of the bar for X coordination
      */
-    protected void paintVolume(GraphicsContext gc, DataSet ds, int index, Color volumeLongColor, Color volumeShortColor, Axis yAxis, double[] distances, double barWidth,
+    protected void paintVolume(GraphicsContext gc, DataSet ds, int index, Paint volumeLongColor, Paint volumeShortColor, Axis yAxis, double[] distances, double barWidth,
             double barWidthHalf, double x0) {
         double volume = ds.get(OhlcvDataSet.DIM_Y_VOLUME, index);
         double open = ds.get(OhlcvDataSet.DIM_Y_OPEN, index);

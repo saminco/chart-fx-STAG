@@ -6,9 +6,6 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.ListChangeListener;
 
@@ -20,6 +17,10 @@ import io.fair_acc.chartfx.renderer.datareduction.DefaultDataReducer;
 import io.fair_acc.chartfx.renderer.datareduction.MaxDataReducer;
 import io.fair_acc.chartfx.renderer.datareduction.RamanDouglasPeukerDataReducer;
 import io.fair_acc.chartfx.renderer.datareduction.VisvalingamMaheswariWhyattDataReducer;
+import io.fair_acc.chartfx.ui.css.CssPropertyFactory;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.StyleUtil;
+import io.fair_acc.chartfx.utils.PropUtil;
 import io.fair_acc.dataset.utils.AssertUtils;
 
 /**
@@ -32,43 +33,57 @@ import io.fair_acc.dataset.utils.AssertUtils;
 @SuppressWarnings({ "PMD.TooManyMethods", "PMD.TooManyFields", "PMD.ExcessivePublicCount" }) // designated purpose of
 // this class
 public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractErrorDataSetRendererParameter<R>>
-        extends AbstractPointReductionManagment<R> {
+        extends AbstractPointReducingRenderer<R> {
     // intensity fading factor per stage
     protected static final double DEFAULT_HISTORY_INTENSITY_FADING = 0.65;
-    private final ObjectProperty<ErrorStyle> errorStyle = new SimpleObjectProperty<>(this, "errorStyle",
-            ErrorStyle.ERRORCOMBO);
+    private final ObjectProperty<ErrorStyle> errorStyle = css().createEnumProperty(this, "errorStyle",
+            ErrorStyle.ERRORCOMBO, true, ErrorStyle.class);
     private final ObjectProperty<RendererDataReducer> rendererDataReducer = new SimpleObjectProperty<>(this,
             "rendererDataReducer", new DefaultDataReducer());
 
-    private final IntegerProperty dashSize = new SimpleIntegerProperty(this, "dashSize", 3);
-    private final DoubleProperty markerSize = new SimpleDoubleProperty(this, "markerSize", 1.5);
-    private final BooleanProperty drawMarker = new SimpleBooleanProperty(this, "drawMarker", true);
-    private final ObjectProperty<LineStyle> polyLineStyle = new SimpleObjectProperty<>(this, "polyLineStyle",
-            LineStyle.NORMAL);
-    private final BooleanProperty drawChartDataSets = new SimpleBooleanProperty(this, "drawChartDataSets", true);
-    private final BooleanProperty drawBars = new SimpleBooleanProperty(this, "drawBars", false);
-    private final BooleanProperty shiftBar = new SimpleBooleanProperty(this, "shiftBar", true);
-    private final IntegerProperty shiftBarOffset = new SimpleIntegerProperty(this, "shiftBarOffset", 3);
-    private final BooleanProperty dynamicBarWidth = new SimpleBooleanProperty(this, "dynamicBarWidth", true);
-    private final DoubleProperty barWidthPercentage = new SimpleDoubleProperty(this, "barWidthPercentage", 70.0);
-    private final IntegerProperty barWidth = new SimpleIntegerProperty(this, "barWidth", 5);
-    private final DoubleProperty intensityFading = new SimpleDoubleProperty(this, "intensityFading",
+    private final IntegerProperty dashSize = css().createIntegerProperty(this, "dashSize", 3);
+    private final BooleanProperty drawMarker = css().createBooleanProperty(this, "drawMarker", true);
+    private final ObjectProperty<LineStyle> polyLineStyle = css().createEnumProperty(this, "polyLineStyle",
+            LineStyle.NORMAL, false, LineStyle.class);
+    private final BooleanProperty drawBars = css().createBooleanProperty(this, "drawBars", false);
+    private final BooleanProperty shiftBar = css().createBooleanProperty(this, "shiftBar", true);
+    private final IntegerProperty shiftBarOffset = css().createIntegerProperty(this, "shiftBarOffset", 3);
+    private final BooleanProperty dynamicBarWidth = css().createBooleanProperty(this, "dynamicBarWidth", true);
+    private final DoubleProperty barWidthPercentage = css().createDoubleProperty(this, "barWidthPercentage", 70.0);
+    private final IntegerProperty barWidth = css().createIntegerProperty(this, "barWidth", 5);
+    private final DoubleProperty intensityFading = css().createDoubleProperty(this, "intensityFading",
             AbstractErrorDataSetRendererParameter.DEFAULT_HISTORY_INTENSITY_FADING);
-    private final BooleanProperty drawBubbles = new SimpleBooleanProperty(this, "drawBubbles", false);
-    private final BooleanProperty allowNaNs = new SimpleBooleanProperty(this, "allowNaNs", false);
+    private final BooleanProperty drawBubbles = css().createBooleanProperty(this, "drawBubbles", false);
+    private final BooleanProperty allowNans = css().createBooleanProperty(this, "allowNans", false);
 
     /**
-     * 
+     *
      */
     public AbstractErrorDataSetRendererParameter() {
         super();
+        StyleUtil.addStyles(this, "error-dataset-renderer");
+        PropUtil.runOnChange(this::invalidateCanvas,
+                errorStyle,
+                rendererDataReducer,
+                dashSize,
+                drawMarker,
+                polyLineStyle,
+                drawBars,
+                shiftBar,
+                shiftBarOffset,
+                dynamicBarWidth,
+                barWidthPercentage,
+                barWidth,
+                intensityFading,
+                drawBubbles,
+                allowNans);
     }
 
     /**
      * @return the drawBubbles property
      */
     public BooleanProperty allowNaNsProperty() {
-        return allowNaNs;
+        return allowNans;
     }
 
     public DoubleProperty barWidthPercentageProperty() {
@@ -95,13 +110,6 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
      */
     public BooleanProperty drawBubblesProperty() {
         return drawBubbles;
-    }
-
-    /**
-     * @return the drawChartDataSets state, ie. if all or only the DataSets attached to the Renderer shall be drawn 
-     */
-    public BooleanProperty drawChartDataSetsProperty() {
-        return drawChartDataSets;
     }
 
     /**
@@ -154,10 +162,12 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
 
     /**
      * @return returns error plotting style
-     * @see ErrorDataSetRenderer#setErrorType(ErrorStyle style) for details
+     * @see ErrorDataSetRenderer#setErrorStyle(ErrorStyle style) for details
      */
     public ErrorStyle getErrorType() {
-        return errorStyleProperty().get();
+        // TODO: figure out why 'none' in CSS maps to null
+        var type = errorStyleProperty().get();
+        return type == null ? ErrorStyle.NONE : type;
     }
 
     /**
@@ -167,15 +177,6 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
      */
     public double getIntensityFading() {
         return intensityFadingProperty().get();
-    }
-
-    /**
-     * Returns the <code>markerSize</code>.
-     *
-     * @return the <code>markerSize</code>.
-     */
-    public double getMarkerSize() {
-        return markerSizeProperty().get();
     }
 
     /**
@@ -230,14 +231,6 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
     }
 
     /**
-     * 
-     * @return whether all or only the DataSets attached to the Renderer shall be drawn 
-     */
-    public boolean isDrawChartDataSets() {
-        return drawChartDataSetsProperty().get();
-    }
-
-    /**
      * @return true if point reduction is on (default) else false.
      */
     public boolean isDrawMarker() {
@@ -256,10 +249,6 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
      */
     public boolean isShiftBar() {
         return shiftBarProperty().get();
-    }
-
-    public DoubleProperty markerSizeProperty() {
-        return markerSize;
     }
 
     /**
@@ -348,14 +337,6 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
     }
 
     /**
-     * 
-     * @param state whether all (true) or only the DataSets attached to the Renderer shall be drawn (false) 
-     */
-    public void setDrawChartDataSets(final boolean state) {
-        drawChartDataSetsProperty().set(state);
-    }
-
-    /**
      * @param state true -&gt; draws markers
      * @return itself (fluent design)
      */
@@ -381,7 +362,7 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
      * @param style ErrorStyle @see ErrorStyle enum
      * @return itself (fluent design)
      */
-    public R setErrorType(final ErrorStyle style) {
+    public R setErrorStyle(final ErrorStyle style) {
         errorStyleProperty().set(style);
         return getThis();
     }
@@ -394,18 +375,6 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
      */
     public R setIntensityFading(final double size) {
         intensityFadingProperty().setValue(size);
-        return getThis();
-    }
-
-    /**
-     * Sets the <code>markerSize</code> to the specified value.
-     *
-     * @param size the <code>markerSize</code> to set.
-     * @return itself (fluent design)
-     */
-    public R setMarkerSize(final double size) {
-        AssertUtils.gtEqThanZero("marker size ", size);
-        markerSizeProperty().setValue(size);
         return getThis();
     }
 
@@ -463,15 +432,14 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
     }
 
     protected R bind(final R other) {
+        chartProperty().bind(other.chartProperty());
         errorStyleProperty().bind(other.errorStyleProperty());
         pointReductionProperty().bind(other.pointReductionProperty());
         assumeSortedDataProperty().bind(other.assumeSortedDataProperty());
         dashSizeProperty().bind(other.dashSizeProperty());
         minRequiredReductionSizeProperty().bind(other.minRequiredReductionSizeProperty());
-        markerSizeProperty().bind(other.markerSizeProperty());
         drawMarkerProperty().bind(other.drawMarkerProperty());
         polyLineStyleProperty().bind(other.polyLineStyleProperty());
-        drawChartDataSetsProperty().bind(other.drawChartDataSetsProperty());
         drawBarsProperty().bind(other.drawBarsProperty());
         drawBubblesProperty().bind(other.drawBubblesProperty());
         allowNaNsProperty().bind(other.allowNaNsProperty());
@@ -501,14 +469,13 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
     protected abstract R getThis();
 
     protected R unbind() {
+        chartProperty().unbind();
         errorStyleProperty().unbind();
         pointReductionProperty().unbind();
         dashSizeProperty().unbind();
         minRequiredReductionSizeProperty().unbind();
-        markerSizeProperty().unbind();
         drawMarkerProperty().unbind();
         polyLineStyleProperty().unbind();
-        drawChartDataSetsProperty().unbind();
         drawBarsProperty().unbind();
         drawBubblesProperty().unbind();
         allowNaNsProperty().unbind();
@@ -521,4 +488,11 @@ public abstract class AbstractErrorDataSetRendererParameter<R extends AbstractEr
 
         return getThis();
     }
+
+    @Override
+    protected CssPropertyFactory<AbstractRenderer<?>> css() {
+        return CSS;
+    }
+
+    private static final CssPropertyFactory<AbstractRenderer<?>> CSS = new CssPropertyFactory<>(AbstractPointReducingRenderer.getClassCssMetaData());
 }

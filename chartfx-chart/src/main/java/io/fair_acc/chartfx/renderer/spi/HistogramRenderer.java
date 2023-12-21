@@ -3,38 +3,28 @@ package io.fair_acc.chartfx.renderer.spi;
 import static io.fair_acc.dataset.DataSet.DIM_X;
 import static io.fair_acc.dataset.DataSet.DIM_Y;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.collections.ObservableList;
-import javafx.geometry.Orientation;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 
-import io.fair_acc.chartfx.Chart;
-import io.fair_acc.chartfx.XYChartCss;
 import io.fair_acc.chartfx.axes.Axis;
-import io.fair_acc.chartfx.axes.spi.CategoryAxis;
 import io.fair_acc.chartfx.renderer.LineStyle;
 import io.fair_acc.chartfx.renderer.Renderer;
 import io.fair_acc.chartfx.renderer.spi.utils.BezierCurve;
-import io.fair_acc.chartfx.renderer.spi.utils.DefaultRenderColorScheme;
-import io.fair_acc.chartfx.utils.StyleParser;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.DataSetStyleParser;
+import io.fair_acc.chartfx.utils.FastDoubleArrayCache;
+import io.fair_acc.chartfx.utils.PropUtil;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.Histogram;
 import io.fair_acc.dataset.spi.LimitedIndexedTreeDataSet;
-import io.fair_acc.dataset.utils.DoubleArrayCache;
-import io.fair_acc.dataset.utils.ProcessingProfiler;
 
 /**
  * Simple renderer specialised for 1D histograms.
@@ -49,16 +39,20 @@ import io.fair_acc.dataset.utils.ProcessingProfiler;
 public class HistogramRenderer extends AbstractErrorDataSetRendererParameter<HistogramRenderer> implements Renderer {
     private final BooleanProperty animate = new SimpleBooleanProperty(this, "animate", false);
     private final BooleanProperty autoSorting = new SimpleBooleanProperty(this, "autoSorting", true);
-    private final ObjectProperty<Chart> chartProperty = new SimpleObjectProperty<>(this, "chartProperty", null);
     private final BooleanProperty roundedCorner = new SimpleBooleanProperty(this, "roundedCorner", true);
     private final IntegerProperty roundedCornerRadius = new SimpleIntegerProperty(this, "roundedCornerRadius", 10);
     private final Map<String, Double> scaling = new ConcurrentHashMap<>();
     private final AnimationTimer timer = new MyTimer();
-    private final List<DataSet> localDataSetList = new ArrayList<>();
+    private final DataSetStyleParser styleParser = DataSetStyleParser.newInstance();
 
     public HistogramRenderer() {
         super();
         setPolyLineStyle(LineStyle.HISTOGRAM_FILLED);
+        PropUtil.runOnChange(this::invalidateCanvas,
+                animate,
+                autoSorting,
+                roundedCorner,
+                roundedCornerRadius);
     }
 
     public BooleanProperty animateProperty() {
@@ -69,37 +63,23 @@ public class HistogramRenderer extends AbstractErrorDataSetRendererParameter<His
         return autoSorting;
     }
 
-    public ObjectProperty<Chart> chartProperty() {
-        return chartProperty;
-    }
-
     @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        final Canvas canvas = new Canvas(width, height);
+    public boolean drawLegendSymbol(final DataSetNode style, final Canvas canvas) {
+        final int width = (int) canvas.getWidth();
+        final int height = (int) canvas.getHeight();
         final GraphicsContext gc = canvas.getGraphicsContext2D();
 
-        final String style = dataSet.getStyle();
-        final Integer layoutOffset = StyleParser.getIntegerPropertyValue(style, XYChartCss.DATASET_LAYOUT_OFFSET);
-        final Integer dsIndexLocal = StyleParser.getIntegerPropertyValue(style, XYChartCss.DATASET_INDEX);
-
-        final int dsLayoutIndexOffset = layoutOffset == null ? 0 : layoutOffset; // TODO: rationalise
-
-        final int plotingIndex = dsLayoutIndexOffset + (dsIndexLocal == null ? dsIndex : dsIndexLocal);
-
         gc.save();
-        DefaultRenderColorScheme.setLineScheme(gc, dataSet.getStyle(), plotingIndex);
-        DefaultRenderColorScheme.setGraphicsContextAttributes(gc, dataSet.getStyle());
-        DefaultRenderColorScheme.setFillScheme(gc, dataSet.getStyle(), plotingIndex);
+        gc.setLineWidth(style.getLineWidth());
+        gc.setLineDashes(style.getLineDashes());
+        gc.setStroke(style.getLineColor());
+        gc.setFill(style.getLineFillPattern());
 
         final double y = height / 2.0;
         gc.fillRect(1, 1, width - 2.0, height - 2.0);
         gc.strokeLine(1, y, width - 2.0, y);
         gc.restore();
-        return canvas;
-    }
-
-    public Chart getChart() {
-        return chartProperty().get();
+        return true;
     }
 
     public int getRoundedCornerRadius() {
@@ -119,65 +99,20 @@ public class HistogramRenderer extends AbstractErrorDataSetRendererParameter<His
     }
 
     @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset, final ObservableList<DataSet> datasets) {
-        final long start = ProcessingProfiler.getTimeStamp();
-        setChartChart(chart);
-        final Axis xAxis = getFirstAxis(Orientation.HORIZONTAL);
-        final Axis yAxis = getFirstAxis(Orientation.VERTICAL);
-
-        // make local copy and add renderer specific data sets
-        localDataSetList.clear();
-        localDataSetList.addAll(datasets);
-        localDataSetList.addAll(super.getDatasets());
-
-        // verify that allDataSets are sorted
-        for (int i = 0; i < localDataSetList.size(); i++) {
-            DataSet dataSet = localDataSetList.get(i);
-            final int index = i;
-            dataSet.lock().readLockGuardOptimistic(() -> {
-                if (!(dataSet instanceof Histogram) && isAutoSorting() && (!isDataSetSorted(dataSet, DIM_X) && !isDataSetSorted(dataSet, DIM_Y))) {
-                    // replace DataSet with sorted variety
-                    // do not need to do this for Histograms as they are always sorted by design
-                    LimitedIndexedTreeDataSet newDataSet = new LimitedIndexedTreeDataSet(dataSet.getName(), Integer.MAX_VALUE);
-                    newDataSet.setVisible(dataSet.isVisible());
-                    newDataSet.set(dataSet);
-                    localDataSetList.set(index, newDataSet);
-                }
-
-                if (index != 0) {
-                    return;
-                }
-                // update categories for the first (index == '0') indexed data set
-                if (xAxis instanceof CategoryAxis) {
-                    final CategoryAxis axis = (CategoryAxis) xAxis;
-                    axis.updateCategories(dataSet);
-                }
-
-                if (yAxis instanceof CategoryAxis) {
-                    final CategoryAxis axis = (CategoryAxis) yAxis;
-                    axis.updateCategories(dataSet);
-                }
-            });
+    protected void render(final GraphicsContext gc, DataSet dataSet, final DataSetNode style) {
+        // replace DataSet with sorted variety
+        // do not need to do this for Histograms as they are always sorted by design
+        if (!(dataSet instanceof Histogram) && isAutoSorting() && (!isDataSetSorted(dataSet, DIM_X) && !isDataSetSorted(dataSet, DIM_Y))) {
+            LimitedIndexedTreeDataSet newDataSet = new LimitedIndexedTreeDataSet(dataSet.getName(), Integer.MAX_VALUE);
+            dataSet = newDataSet.set(dataSet);
         }
 
-        drawHistograms(gc, localDataSetList, xAxis, yAxis, dataSetOffset);
-        drawBars(gc, localDataSetList, xAxis, yAxis, dataSetOffset, true);
+        drawHistograms(gc, style, dataSet);
+        drawBars(gc, style, dataSet, true);
 
         if (isAnimate()) {
             timer.start();
         }
-
-        ProcessingProfiler.getTimeDiff(start);
-
-        return localDataSetList;
-    }
-
-    public void requestLayout() {
-        final Chart chart = getChart();
-        if (chart == null) {
-            return;
-        }
-        chart.requestLayout();
     }
 
     public BooleanProperty roundedCornerProperty() {
@@ -196,10 +131,6 @@ public class HistogramRenderer extends AbstractErrorDataSetRendererParameter<His
         this.autoSortingProperty().set(autoSorting);
     }
 
-    public void setChartChart(final Chart chartProperty) {
-        this.chartProperty().set(chartProperty);
-    }
-
     public void setRoundedCorner(final boolean roundedCorner) {
         this.roundedCornerProperty().set(roundedCorner);
     }
@@ -208,383 +139,313 @@ public class HistogramRenderer extends AbstractErrorDataSetRendererParameter<His
         this.roundedCornerRadius.set(roundedCornerRadius);
     }
 
-    protected void drawBars(final GraphicsContext gc, final List<DataSet> dataSets, final Axis xAxis, final Axis yAxis, final int dataSetOffset, final boolean filled) { // NOPMD NOSONAR - complexity nearly unavoidable
+    protected void drawBars(final GraphicsContext gc, final DataSetNode style, final DataSet ds, final boolean filled) { // NOPMD NOSONAR - complexity nearly unavoidable
         if (!isDrawBars()) {
             return;
         }
 
-        int lindex = dataSetOffset - 1;
-        for (DataSet ds : dataSets) {
-            lindex++;
-            if (!ds.isVisible() || ds.getDataCount() == 0) {
-                continue;
-            }
-            final double scaleValue = isAnimate() ? scaling.getOrDefault(ds.getName(), 1.0) : 1.0;
-            final boolean isVerticalDataSet = isVerticalDataSet(ds);
+        final double scaleValue = isAnimate() ? scaling.getOrDefault(ds.getName(), 1.0) : 1.0;
+        final boolean isVerticalDataSet = isVerticalDataSet(ds);
 
-            final double barWPercentage = getBarWidthPercentage();
-            final double constBarWidth = getBarWidth();
+        final double barWPercentage = getBarWidthPercentage();
+        final double constBarWidth = getBarWidth();
 
-            final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
-            final int dimIndexOrdinate = isVerticalDataSet ? DIM_X : DIM_Y;
-            final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
-            final Axis ordinate = isVerticalDataSet ? xAxis : yAxis;
+        final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
+        final int dimIndexOrdinate = isVerticalDataSet ? DIM_X : DIM_Y;
+        final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
+        final Axis ordinate = isVerticalDataSet ? xAxis : yAxis;
 
-            final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
-            final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
-            final int nRange = Math.abs(indexMax - indexMin);
-            final double axisMin = getAxisMin(xAxis, yAxis, !isVerticalDataSet);
-            final boolean isHistogram = ds instanceof Histogram;
-
-            gc.save();
-            DefaultRenderColorScheme.setMarkerScheme(gc, ds.getStyle(), lindex);
-            DefaultRenderColorScheme.setLineScheme(gc, ds.getStyle(), lindex);
-            DefaultRenderColorScheme.setGraphicsContextAttributes(gc, ds.getStyle());
-            gc.setFill(gc.getStroke()); // global fill equals to stroke
-
-            for (int i = 0; i < nRange; i++) {
-                final int index = indexMin + i;
-
-                final double scale = isAnimate() ? Math.max(0.0, Math.min(1.0, scaleValue - index)) : 1.0;
-                final double binValue = ordinate.getDisplayPosition(scale * ds.get(dimIndexOrdinate, index));
-                final double binCentre = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, index));
-                final double binStart = abscissa.getDisplayPosition(getBinStart(ds, dimIndexAbscissa, index));
-                final double binStop = abscissa.getDisplayPosition(getBinStop(ds, dimIndexAbscissa, index));
-                final double minRequiredWidth = Math.max(getDashSize(), Math.abs(binStop - binStart) / (this.isShiftBar() ? dataSets.size() : 1.0));
-                final double binWidth = minRequiredWidth * barWPercentage / 100.0;
-                final double localBarWidth = isDynamicBarWidth() ? 0.5 * binWidth : constBarWidth;
-                final double barOffset;
-                if (dataSets.size() == 1) {
-                    barOffset = 0.0;
-                } else {
-                    barOffset = (isDynamicBarWidth() ? minRequiredWidth : getShiftBarOffset()) * (lindex - 0.25 * dataSets.size());
-                }
-
-                final double offset = this.isShiftBar() ? barOffset : 0.0;
-                final double x0 = isHistogram ? binStart : binCentre - localBarWidth - offset;
-                final double x1 = isHistogram ? binStop : binCentre + localBarWidth - offset;
-                final String dataPointStyle = ds.getStyle(index);
-                if (dataPointStyle != null) {
-                    gc.save();
-                    DefaultRenderColorScheme.setMarkerScheme(gc, dataPointStyle, lindex);
-                    DefaultRenderColorScheme.setLineScheme(gc, dataPointStyle, lindex);
-                    DefaultRenderColorScheme.setFillScheme(gc, dataPointStyle, lindex);
-                    DefaultRenderColorScheme.setGraphicsContextAttributes(gc, dataPointStyle);
-                }
-                double topRadius = isRoundedCorner() ? Math.max(0, Math.min(getRoundedCornerRadius(), 0.5 * binWidth)) : 0.0;
-
-                drawBar(gc, x0, axisMin, x1, binValue, topRadius, isVerticalDataSet, filled);
-
-                if (dataPointStyle != null) {
-                    gc.restore();
-                }
-            }
-
-            gc.restore();
-        } /* end of DataSet list loop */
+        final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
+        final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
+        final int nRange = Math.abs(indexMax - indexMin);
+        final double axisMin = getAxisMin(xAxis, yAxis, !isVerticalDataSet);
+        final boolean isHistogram = ds instanceof Histogram;
 
         gc.save();
-    }
+        style.applyLineStrokeStyle(gc);
+        gc.setFill(style.getLineColor());
 
-    protected void drawHistograms(final GraphicsContext gc, final List<DataSet> dataSets, final Axis xAxis, final Axis yAxis, final int dataSetOffset) {
-        final ArrayDeque<DataSet> lockQueue = new ArrayDeque<>(dataSets.size());
-        try {
-            dataSets.forEach(ds -> {
-                lockQueue.push(ds);
-                ds.lock().readLock();
-            });
+        for (int i = 0; i < nRange; i++) {
+            final int index = indexMin + i;
 
-            switch (getPolyLineStyle()) {
-            case NONE:
-                return;
-            case AREA:
-                drawPolyLineLine(gc, dataSets, xAxis, yAxis, dataSetOffset, true);
-                break;
-            case ZERO_ORDER_HOLDER:
-            case STAIR_CASE:
-                drawPolyLineStairCase(gc, dataSets, xAxis, yAxis, dataSetOffset, false);
-                break;
-            case HISTOGRAM:
-                drawPolyLineHistogram(gc, dataSets, xAxis, yAxis, dataSetOffset, false);
-                break;
-            case HISTOGRAM_FILLED:
-                drawPolyLineHistogram(gc, dataSets, xAxis, yAxis, dataSetOffset, true);
-                break;
-            case BEZIER_CURVE:
-                drawPolyLineHistogramBezier(gc, dataSets, xAxis, yAxis, dataSetOffset, true);
-                break;
-            case NORMAL:
-            default:
-                drawPolyLineLine(gc, dataSets, xAxis, yAxis, dataSetOffset, false);
-                break;
-            }
-        } finally {
-            // unlock in reverse order
-            while (!lockQueue.isEmpty()) {
-                lockQueue.pop().lock().readUnLock();
-            }
-        }
-    }
-
-    protected static void drawPolyLineHistogram(final GraphicsContext gc, final List<DataSet> dataSets, final Axis xAxis, final Axis yAxis, final int dataSetOffset, boolean filled) {
-        int lindex = dataSetOffset - 1;
-        for (DataSet ds : dataSets) {
-            lindex++;
-            if (!ds.isVisible() || ds.getDataCount() == 0) {
-                continue;
-            }
-            final boolean isVerticalDataSet = isVerticalDataSet(ds);
-
-            final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
-            final int dimIndexOrdinate = isVerticalDataSet ? DIM_X : DIM_Y;
-            final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
-            final Axis ordinate = isVerticalDataSet ? xAxis : yAxis;
-
-            final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
-            final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
-
-            // need to allocate new array :-(
-            final int nRange = Math.abs(indexMax - indexMin);
-            final double[] newX = DoubleArrayCache.getInstance().getArrayExact(2 * (nRange + 1));
-            final double[] newY = DoubleArrayCache.getInstance().getArrayExact(2 * (nRange + 1));
-            final double axisMin = getAxisMin(xAxis, yAxis, !isVerticalDataSet);
-
-            for (int i = 0; i < nRange; i++) {
-                final int index = indexMin + i;
-                final double binValue = ordinate.getDisplayPosition(ds.get(dimIndexOrdinate, index));
-                final double binStart = abscissa.getDisplayPosition(getBinStart(ds, dimIndexAbscissa, index));
-                final double binStop = abscissa.getDisplayPosition(getBinStop(ds, dimIndexAbscissa, index));
-                newX[2 * i + 1] = binStart;
-                newY[2 * i + 1] = binValue;
-                newX[2 * i + 2] = binStop;
-                newY[2 * i + 2] = binValue;
-            }
-            // first point
-            newX[0] = newX[1];
-            newY[0] = axisMin;
-
-            // last point
-            newX[2 * (nRange + 1) - 1] = newX[2 * (nRange + 1) - 2];
-            newY[2 * (nRange + 1) - 1] = axisMin;
-
-            gc.save();
-            DefaultRenderColorScheme.setLineScheme(gc, ds.getStyle(), lindex);
-            DefaultRenderColorScheme.setGraphicsContextAttributes(gc, ds.getStyle());
-
-            drawPolygon(gc, newX, newY, filled, isVerticalDataSet);
-            gc.restore();
-
-            // release arrays to cache
-            DoubleArrayCache.getInstance().add(newX);
-            DoubleArrayCache.getInstance().add(newY);
-        }
-    }
-
-    protected static void drawPolyLineHistogramBezier(final GraphicsContext gc, final List<DataSet> dataSets, final Axis xAxis, final Axis yAxis, final int dataSetOffset, boolean filled) {
-        int lindex = dataSetOffset - 1;
-        for (DataSet ds : dataSets) {
-            lindex++;
-            if (!ds.isVisible()) {
-                continue;
-            }
-            final boolean isVerticalDataSet = isVerticalDataSet(ds);
-
-            final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
-            final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
-            final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
-            final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
-
-            final int min = Math.min(indexMin, indexMax);
-            final int nRange = Math.abs(indexMax - indexMin);
-
-            if (nRange <= 2) {
-                drawPolyLineLine(gc, List.of(ds), xAxis, yAxis, lindex, filled);
-                continue;
-            }
-
-            // need to allocate new array :-(
-            final double[] xCp1 = DoubleArrayCache.getInstance().getArrayExact(nRange);
-            final double[] yCp1 = DoubleArrayCache.getInstance().getArrayExact(nRange);
-            final double[] xCp2 = DoubleArrayCache.getInstance().getArrayExact(nRange);
-            final double[] yCp2 = DoubleArrayCache.getInstance().getArrayExact(nRange);
-
-            final double[] xValues = DoubleArrayCache.getInstance().getArrayExact(nRange);
-            final double[] yValues = DoubleArrayCache.getInstance().getArrayExact(nRange);
-
-            for (int i = 0; i < nRange; i++) {
-                xValues[i] = xAxis.getDisplayPosition(ds.get(DIM_X, min + i));
-                yValues[i] = yAxis.getDisplayPosition(ds.get(DIM_Y, min + i));
-            }
-            BezierCurve.calcCurveControlPoints(xValues, yValues, xCp1, yCp1, xCp2, yCp2, nRange);
-
-            gc.save();
-            DefaultRenderColorScheme.setLineScheme(gc, ds.getStyle(), lindex);
-            DefaultRenderColorScheme.setGraphicsContextAttributes(gc, ds.getStyle());
-
-            // use stroke as fill colour
-            gc.setFill(gc.getStroke());
-            gc.beginPath();
-            for (int i = 0; i < nRange - 1; i++) {
-                final double x0 = xValues[i];
-                final double x1 = xValues[i + 1];
-                final double y0 = yValues[i];
-                final double y1 = yValues[i + 1];
-
-                // coordinates of first Bezier control point.
-                final double xc0 = xCp1[i];
-                final double yc0 = yCp1[i];
-                // coordinates of the second Bezier control point.
-                final double xc1 = xCp2[i];
-                final double yc1 = yCp2[i];
-
-                gc.moveTo(x0, y0);
-                gc.bezierCurveTo(xc0, yc0, xc1, yc1, x1, y1);
-            }
-            gc.moveTo(xValues[nRange - 1], yValues[nRange - 1]);
-            gc.closePath();
-            gc.stroke();
-            gc.restore();
-
-            // release arrays to Cache
-            DoubleArrayCache.getInstance().add(xValues);
-            DoubleArrayCache.getInstance().add(yValues);
-            DoubleArrayCache.getInstance().add(xCp1);
-            DoubleArrayCache.getInstance().add(yCp1);
-            DoubleArrayCache.getInstance().add(xCp2);
-            DoubleArrayCache.getInstance().add(yCp2);
-        }
-    }
-
-    protected static void drawPolyLineLine(final GraphicsContext gc, final List<DataSet> dataSets, final Axis xAxis, final Axis yAxis, final int dataSetOffset, boolean filled) { // NOPMD NOSONAR - complexity nearly unavoidable
-        int lindex = dataSetOffset - 1;
-        for (DataSet ds : dataSets) {
-            lindex++;
-            if (!ds.isVisible()) {
-                continue;
-            }
-            final boolean isVerticalDataSet = isVerticalDataSet(ds);
-
-            final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
-            final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
-            final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
-            final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
-            final int nRange = Math.abs(indexMax - indexMin);
-            if (nRange == 0) {
-                continue;
-            }
-
-            gc.save();
-            DefaultRenderColorScheme.setLineScheme(gc, ds.getStyle(), lindex);
-            DefaultRenderColorScheme.setGraphicsContextAttributes(gc, ds.getStyle());
-            gc.beginPath();
-            double a = xAxis.getDisplayPosition(ds.get(DIM_X, indexMin));
-            double b = yAxis.getDisplayPosition(ds.get(DIM_Y, indexMin));
-            gc.moveTo(a, b);
-            boolean lastIsFinite = true;
-            double xLastValid = 0.0;
-            double yLastValid = 0.0;
-            for (int i = indexMin + 1; i < indexMax; i++) {
-                a = xAxis.getDisplayPosition(ds.get(DIM_X, i));
-                b = yAxis.getDisplayPosition(ds.get(DIM_Y, i));
-
-                if (Double.isFinite(a) && Double.isFinite(b)) {
-                    if (!lastIsFinite) {
-                        gc.moveTo(a, b);
-                        lastIsFinite = true;
-                        continue;
-                    }
-                    gc.lineTo(a, b);
-                    xLastValid = a;
-                    yLastValid = b;
-                    lastIsFinite = true;
-                } else {
-                    lastIsFinite = false;
-                }
-            }
-            gc.moveTo(xLastValid, yLastValid);
-            gc.closePath();
-
-            if (filled) {
-                gc.fill();
+            final double scale = isAnimate() ? Math.max(0.0, Math.min(1.0, scaleValue - index)) : 1.0;
+            final double binValue = ordinate.getDisplayPosition(scale * ds.get(dimIndexOrdinate, index));
+            final double binCentre = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, index));
+            final double binStart = abscissa.getDisplayPosition(getBinStart(ds, dimIndexAbscissa, index));
+            final double binStop = abscissa.getDisplayPosition(getBinStop(ds, dimIndexAbscissa, index));
+            final double minRequiredWidth = Math.max(getDashSize(), Math.abs(binStop - binStart) / (this.isShiftBar() ? getDatasets().size() : 1.0));
+            final double binWidth = minRequiredWidth * barWPercentage / 100.0;
+            final double localBarWidth = isDynamicBarWidth() ? 0.5 * binWidth : constBarWidth;
+            final double barOffset;
+            if (getDatasets().size() == 1) {
+                barOffset = 0.0;
             } else {
-                gc.stroke();
+                barOffset = (isDynamicBarWidth() ? minRequiredWidth : getShiftBarOffset()) * (style.getLocalIndex() - 0.25 * getDatasets().size());
+            }
+            final double offset = this.isShiftBar() ? barOffset : 0.0;
+            final double x0 = isHistogram ? binStart : binCentre - localBarWidth - offset;
+            final double x1 = isHistogram ? binStop : binCentre + localBarWidth - offset;
+            final double topRadius = isRoundedCorner() ? Math.max(0, Math.min(getRoundedCornerRadius(), 0.5 * binWidth)) : 0.0;
+
+            final boolean applyCustomStyle = styleParser.tryParse(ds.getStyle(index));
+            if (applyCustomStyle) {
+                gc.save();
+                styleParser.getLineWidth().ifPresent(gc::setLineWidth);
+                styleParser.getLineDashes().ifPresent(gc::setLineDashes);
+                styleParser.getLineColor().ifPresent(gc::setStroke);
+                styleParser.getLineColor().ifPresent(gc::setFill);
             }
 
-            gc.restore();
+            drawBar(gc, x0, axisMin, x1, binValue, topRadius, isVerticalDataSet, filled);
+
+            if (applyCustomStyle) {
+                gc.restore();
+            }
+        }
+
+        gc.restore();
+    }
+
+    protected void drawHistograms(final GraphicsContext gc, final DataSetNode style, final DataSet dataSet) {
+        switch (getPolyLineStyle()) {
+        case NONE:
+            return;
+        case AREA:
+            drawPolyLineLine(gc, style, dataSet, xAxis, yAxis, true);
+            break;
+        case ZERO_ORDER_HOLDER:
+        case STAIR_CASE:
+            drawPolyLineStairCase(gc, style, dataSet, xAxis, yAxis, false);
+            break;
+        case HISTOGRAM:
+            drawPolyLineHistogram(gc, style, dataSet, xAxis, yAxis, false);
+            break;
+        case HISTOGRAM_FILLED:
+            drawPolyLineHistogram(gc, style, dataSet, xAxis, yAxis, true);
+            break;
+        case BEZIER_CURVE:
+            drawPolyLineHistogramBezier(gc, style, dataSet, xAxis, yAxis, true);
+            break;
+        case NORMAL:
+        default:
+            drawPolyLineLine(gc, style, dataSet, xAxis, yAxis, false);
+            break;
         }
     }
 
-    protected static void drawPolyLineStairCase(final GraphicsContext gc, final List<DataSet> dataSets, final Axis xAxis, final Axis yAxis, final int dataSetOffset, boolean filled) {
-        int lindex = dataSetOffset - 1;
-        for (DataSet ds : dataSets) {
-            lindex++;
-            if (!ds.isVisible()) {
-                continue;
-            }
-            final boolean isVerticalDataSet = isVerticalDataSet(ds);
-
-            final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
-            final int dimIndexOrdinate = isVerticalDataSet ? DIM_X : DIM_Y;
-            final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
-            final Axis ordinate = isVerticalDataSet ? xAxis : yAxis;
-
-            final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
-            final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
-
-            final int min = Math.min(indexMin, indexMax);
-            final int nRange = Math.abs(indexMax - indexMin);
-            final double axisMin = getAxisMin(xAxis, yAxis, !isVerticalDataSet);
-            if (nRange <= 0) {
-                drawPolyLineLine(gc, List.of(ds), xAxis, yAxis, lindex, filled);
-                continue;
-            }
-
-            // need to allocate new array :-(
-            final double[] newX = DoubleArrayCache.getInstance().getArrayExact(2 * nRange);
-            final double[] newY = DoubleArrayCache.getInstance().getArrayExact(2 * nRange);
-
-            for (int i = 0; i < nRange - 1; i++) {
-                final int index = i + min;
-                newX[2 * i] = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, index));
-                newY[2 * i] = ordinate.getDisplayPosition(ds.get(dimIndexOrdinate, index));
-                newX[2 * i + 1] = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, index + 1));
-                newY[2 * i + 1] = newY[2 * i];
-            }
-            // last point
-            newX[2 * (nRange - 1)] = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, min + nRange - 1));
-            newY[2 * (nRange - 1)] = ordinate.getDisplayPosition(ds.get(dimIndexOrdinate, min + nRange - 1));
-            newX[2 * nRange - 1] = abscissa.getDisplayPosition(axisMin);
-            newY[2 * nRange - 1] = newY[2 * (nRange - 1)];
-
-            gc.save();
-            DefaultRenderColorScheme.setLineScheme(gc, ds.getStyle(), lindex);
-            DefaultRenderColorScheme.setGraphicsContextAttributes(gc, ds.getStyle());
-
-            drawPolygon(gc, newX, newY, filled, isVerticalDataSet);
-            gc.restore();
-
-            // release arrays to cache
-            DoubleArrayCache.getInstance().add(newX);
-            DoubleArrayCache.getInstance().add(newY);
+    protected static void drawPolyLineHistogram(final GraphicsContext gc, final DataSetNode style, final DataSet ds, final Axis xAxis, final Axis yAxis, boolean filled) {
+        if (ds.getDataCount() == 0) {
+            return;
         }
+        final boolean isVerticalDataSet = isVerticalDataSet(ds);
+
+        final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
+        final int dimIndexOrdinate = isVerticalDataSet ? DIM_X : DIM_Y;
+        final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
+        final Axis ordinate = isVerticalDataSet ? xAxis : yAxis;
+
+        final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
+        final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
+
+        // need to allocate new array :-(
+        final int nRange = Math.abs(indexMax - indexMin);
+        final double[] newX = SHARED_ARRAYS.getArray(0, 2 * (nRange + 1));
+        final double[] newY = SHARED_ARRAYS.getArray(1, 2 * (nRange + 1));
+        final double axisMin = getAxisMin(xAxis, yAxis, !isVerticalDataSet);
+
+        for (int i = 0; i < nRange; i++) {
+            final int index = indexMin + i;
+            final double binValue = ordinate.getDisplayPosition(ds.get(dimIndexOrdinate, index));
+            final double binStart = abscissa.getDisplayPosition(getBinStart(ds, dimIndexAbscissa, index));
+            final double binStop = abscissa.getDisplayPosition(getBinStop(ds, dimIndexAbscissa, index));
+            newX[2 * i + 1] = binStart;
+            newY[2 * i + 1] = binValue;
+            newX[2 * i + 2] = binStop;
+            newY[2 * i + 2] = binValue;
+        }
+        // first point
+        newX[0] = newX[1];
+        newY[0] = axisMin;
+
+        // last point
+        newX[2 * (nRange + 1) - 1] = newX[2 * (nRange + 1) - 2];
+        newY[2 * (nRange + 1) - 1] = axisMin;
+
+        gc.save();
+        style.applyLineStrokeStyle(gc);
+
+        drawPolygon(gc, newX, newY, filled, isVerticalDataSet, 2 * nRange + 2);
+
+        gc.restore();
     }
 
-    protected static void drawPolygon(final GraphicsContext gc, final double[] a, final double[] b, final boolean filled, final boolean isVerticalDataSet) {
+    protected static void drawPolyLineHistogramBezier(final GraphicsContext gc, final DataSetNode style, final DataSet ds, final Axis xAxis, final Axis yAxis, boolean filled) {
+        final boolean isVerticalDataSet = isVerticalDataSet(ds);
+
+        final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
+        final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
+        final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
+        final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
+
+        final int min = Math.min(indexMin, indexMax);
+        final int nRange = Math.abs(indexMax - indexMin);
+
+        if (nRange <= 2) {
+            drawPolyLineLine(gc, style, ds, xAxis, yAxis, filled);
+            return;
+        }
+
+        final double[] xCp1 = SHARED_ARRAYS.getArray(0, nRange);
+        final double[] yCp1 = SHARED_ARRAYS.getArray(1, nRange);
+        final double[] xCp2 = SHARED_ARRAYS.getArray(2, nRange);
+        final double[] yCp2 = SHARED_ARRAYS.getArray(3, nRange);
+
+        final double[] xValues = SHARED_ARRAYS.getArray(4, nRange);
+        final double[] yValues = SHARED_ARRAYS.getArray(5, nRange);
+
+        for (int i = 0; i < nRange; i++) {
+            xValues[i] = xAxis.getDisplayPosition(ds.get(DIM_X, min + i));
+            yValues[i] = yAxis.getDisplayPosition(ds.get(DIM_Y, min + i));
+        }
+        BezierCurve.calcCurveControlPoints(xValues, yValues, xCp1, yCp1, xCp2, yCp2, nRange);
+
+        gc.save();
+        style.applyLineStrokeStyle(gc);
+
+        gc.beginPath();
+        for (int i = 0; i < nRange - 1; i++) {
+            final double x0 = xValues[i];
+            final double x1 = xValues[i + 1];
+            final double y0 = yValues[i];
+            final double y1 = yValues[i + 1];
+
+            // coordinates of first Bezier control point.
+            final double xc0 = xCp1[i];
+            final double yc0 = yCp1[i];
+            // coordinates of the second Bezier control point.
+            final double xc1 = xCp2[i];
+            final double yc1 = yCp2[i];
+
+            gc.moveTo(x0, y0);
+            gc.bezierCurveTo(xc0, yc0, xc1, yc1, x1, y1);
+        }
+        gc.moveTo(xValues[nRange - 1], yValues[nRange - 1]);
+        gc.closePath();
+        gc.stroke();
+        gc.restore();
+    }
+
+    protected static void drawPolyLineLine(final GraphicsContext gc, final DataSetNode style, final DataSet ds, final Axis xAxis, final Axis yAxis, boolean filled) { // NOPMD NOSONAR - complexity nearly unavoidable
+        final boolean isVerticalDataSet = isVerticalDataSet(ds);
+
+        final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
+        final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
+        final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
+        final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
+        final int nRange = Math.abs(indexMax - indexMin);
+        if (nRange == 0) {
+            return;
+        }
+
+        gc.save();
+        gc.beginPath();
+        double a = xAxis.getDisplayPosition(ds.get(DIM_X, indexMin));
+        double b = yAxis.getDisplayPosition(ds.get(DIM_Y, indexMin));
+        gc.moveTo(a, b);
+        boolean lastIsFinite = true;
+        double xLastValid = 0.0;
+        double yLastValid = 0.0;
+        for (int i = indexMin + 1; i < indexMax; i++) {
+            a = xAxis.getDisplayPosition(ds.get(DIM_X, i));
+            b = yAxis.getDisplayPosition(ds.get(DIM_Y, i));
+
+            if (Double.isFinite(a) && Double.isFinite(b)) {
+                if (!lastIsFinite) {
+                    gc.moveTo(a, b);
+                    lastIsFinite = true;
+                    continue;
+                }
+                gc.lineTo(a, b);
+                xLastValid = a;
+                yLastValid = b;
+                lastIsFinite = true;
+            } else {
+                lastIsFinite = false;
+            }
+        }
+        gc.moveTo(xLastValid, yLastValid);
+        gc.closePath();
+
+        if (filled) {
+            gc.setFill(style.getLineColor());
+            gc.fill();
+        } else {
+            style.applyLineStrokeStyle(gc);
+            gc.stroke();
+        }
+
+        gc.restore();
+    }
+
+    protected static void drawPolyLineStairCase(final GraphicsContext gc, final DataSetNode style, final DataSet ds, final Axis xAxis, final Axis yAxis, boolean filled) {
+        final boolean isVerticalDataSet = isVerticalDataSet(ds);
+
+        final int dimIndexAbscissa = isVerticalDataSet ? DIM_Y : DIM_X;
+        final int dimIndexOrdinate = isVerticalDataSet ? DIM_X : DIM_Y;
+        final Axis abscissa = isVerticalDataSet ? yAxis : xAxis;
+        final Axis ordinate = isVerticalDataSet ? xAxis : yAxis;
+
+        final int indexMin = Math.max(0, ds.getIndex(dimIndexAbscissa, Math.min(abscissa.getMin(), abscissa.getMax())));
+        final int indexMax = Math.min(ds.getDataCount(), ds.getIndex(dimIndexAbscissa, Math.max(abscissa.getMin(), abscissa.getMax()) + 1.0));
+
+        final int min = Math.min(indexMin, indexMax);
+        final int nRange = Math.abs(indexMax - indexMin);
+        final double axisMin = getAxisMin(xAxis, yAxis, !isVerticalDataSet);
+        if (nRange <= 0) {
+            drawPolyLineLine(gc, style, ds, xAxis, yAxis, filled);
+            return;
+        }
+
+        // need to allocate new array :-(
+        final double[] newX = SHARED_ARRAYS.getArray(0, 2 * nRange);
+        final double[] newY = SHARED_ARRAYS.getArray(1, 2 * nRange);
+
+        for (int i = 0; i < nRange - 1; i++) {
+            final int index = i + min;
+            newX[2 * i] = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, index));
+            newY[2 * i] = ordinate.getDisplayPosition(ds.get(dimIndexOrdinate, index));
+            newX[2 * i + 1] = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, index + 1));
+            newY[2 * i + 1] = newY[2 * i];
+        }
+        // last point
+        newX[2 * (nRange - 1)] = abscissa.getDisplayPosition(ds.get(dimIndexAbscissa, min + nRange - 1));
+        newY[2 * (nRange - 1)] = ordinate.getDisplayPosition(ds.get(dimIndexOrdinate, min + nRange - 1));
+        newX[2 * nRange - 1] = abscissa.getDisplayPosition(axisMin);
+        newY[2 * nRange - 1] = newY[2 * (nRange - 1)];
+
+        gc.save();
+        style.applyLineStrokeStyle(gc);
+
+        drawPolygon(gc, newX, newY, filled, isVerticalDataSet, 2 * nRange);
+        gc.restore();
+    }
+
+    protected static void drawPolygon(final GraphicsContext gc, final double[] a, final double[] b, final boolean filled, final boolean isVerticalDataSet, final int length) {
         if (filled) {
             // use stroke as fill colour
             gc.setFill(gc.getStroke());
             if (isVerticalDataSet) {
-                gc.fillPolygon(b, a, a.length); // NOPMD NOSONAR - flip on purpose
+                gc.fillPolygon(b, a, length); // NOPMD NOSONAR - flip on purpose
             } else {
-                gc.fillPolygon(a, b, a.length);
+                gc.fillPolygon(a, b, length);
             }
             return;
         }
         // stroke only
         if (isVerticalDataSet) {
-            gc.strokePolyline(b, a, a.length); // NOPMD NOSONAR - flip on purpose
+            gc.strokePolyline(b, a, length); // NOPMD NOSONAR - flip on purpose
         } else {
-            gc.strokePolyline(a, b, a.length);
+            gc.strokePolyline(a, b, length);
         }
     }
 
@@ -702,15 +563,26 @@ public class HistogramRenderer extends AbstractErrorDataSetRendererParameter<His
                 return;
             }
 
-            for (final DataSet dataSet : localDataSetList) {
+            for (final var dataSet : getDatasets()) {
                 // scheme 1
                 // final Double val = scaling.put(dataSet.getName(), Math.min(scaling.computeIfAbsent(dataSet.getName(), ds -> 0.0) + 0.05, 1.0))
                 // scheme 2
                 final Double val = scaling.put(dataSet.getName(), Math.min(scaling.computeIfAbsent(dataSet.getName(), ds -> 0.0) + 0.05, dataSet.getDataCount() + 1.0));
                 if (val != null && val < dataSet.getDataCount() + 1.0) {
-                    HistogramRenderer.this.requestLayout();
+                    invalidateCanvas();
                 }
             }
         }
     }
+
+    /**
+     * Deletes all arrays that are larger than necessary for the last drawn dataset
+     */
+    public static void trimCache() {
+        SHARED_ARRAYS.trim();
+    }
+
+    // The cache can be shared because there can only ever be one renderer accessing it
+    // Note: should not be exposed to child classes to guarantee that arrays aren't double used.
+    private static final FastDoubleArrayCache SHARED_ARRAYS = new FastDoubleArrayCache(6);
 }

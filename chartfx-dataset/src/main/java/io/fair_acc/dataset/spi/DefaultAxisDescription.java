@@ -1,18 +1,11 @@
 package io.fair_acc.dataset.spi;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.fair_acc.dataset.AxisDescription;
+import io.fair_acc.dataset.events.BitState;
+import io.fair_acc.dataset.events.ChartBits;
 import io.fair_acc.dataset.spi.utils.MathUtils;
-import io.fair_acc.dataset.event.AxisChangeEvent;
-import io.fair_acc.dataset.event.AxisNameChangeEvent;
-import io.fair_acc.dataset.event.AxisRangeChangeEvent;
-import io.fair_acc.dataset.event.AxisRecomputationEvent;
-import io.fair_acc.dataset.event.EventListener;
 
 /**
  * Simple default implementation of the AxisDescription interface
@@ -20,8 +13,9 @@ import io.fair_acc.dataset.event.EventListener;
  * @author rstein
  */
 public class DefaultAxisDescription extends DataRange implements AxisDescription {
-    private final transient AtomicBoolean autoNotification = new AtomicBoolean(true);
-    private final transient List<EventListener> updateListeners = Collections.synchronizedList(new LinkedList<>());
+    private final transient BitState state = BitState.initDirty(this);
+    private final Runnable notifyRangeChanged = state.onAction(ChartBits.AxisDescriptionRange);
+    private final Runnable notifyNameChanged = state.onAction(ChartBits.AxisDescriptionName);
     private final int dimIndex;
     private String name;
     private String unit;
@@ -73,44 +67,6 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
         this.set(axisName, axisUnit, rangeMin, rangeMax);
     }
 
-    /**
-     * Adds value to this range.
-     *
-     * @param value value to be added
-     * @return <code>true</code> if the value becomes <code>min</code> or <code>max</code>.
-     */
-    @Override
-    public boolean add(final double value) {
-        if (!super.add(value)) {
-            return false;
-        }
-
-        notifyRangeChange();
-        return true;
-    }
-
-    /**
-     * Adds values to this range.
-     *
-     * @param values values to be added
-     * @param length the maximum array length that should be taken into account
-     * @return <code>true</code> if the value becomes <code>min</code> or <code>max</code>.
-     */
-    @Override
-    public boolean add(final double[] values, final int length) {
-        if (!super.add(values, length)) {
-            return false;
-        }
-
-        notifyRangeChange();
-        return true;
-    }
-
-    @Override
-    public AtomicBoolean autoNotification() {
-        return autoNotification;
-    }
-
     @Override
     public boolean equals(final Object obj) {
         if (!(obj instanceof AxisDescription)) {
@@ -135,10 +91,6 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
         final AxisDescription other = (AxisDescription) obj;
         if (hashCode() == other.hashCode()) {
             return true;
-        }
-
-        if (epsilon <= 0.0) {
-            return false;
         }
 
         if (!strEqual(getName(), other.getName())) {
@@ -167,36 +119,6 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
     }
 
     @Override
-    public final double getMax() {
-        if (this.isMaxDefined()) {
-            return super.getMax();
-        }
-        // axis range min value is invalid -- attempt to recompute
-        // the recomputeLimits is usually recomputed when validating the axis,
-        // this function is called in case e.g. a point has been modified and range invalidated
-        final boolean oldNotifyState = autoNotification.getAndSet(true);
-        invokeListener(new AxisRecomputationEvent(this, updateMessage(), getDimIndex()));
-        autoNotification.getAndSet(oldNotifyState);
-
-        return super.getMax();
-    }
-
-    @Override
-    public final double getMin() {
-        if (this.isMinDefined()) {
-            return super.getMin();
-        }
-        // axis range min value is invalid -- attempt to recompute
-        // the recomputeLimits is usually recomputed when validating the axis,
-        // this function is called in case e.g. a point has been modified and range invalidated
-        final boolean oldNotifyState = autoNotification.getAndSet(true);
-        invokeListener(new AxisRecomputationEvent(this, updateMessage(), getDimIndex()));
-        autoNotification.getAndSet(oldNotifyState);
-
-        return super.getMin();
-    }
-
-    @Override
     public final String getName() {
         return name;
     }
@@ -218,30 +140,10 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
     }
 
     @Override
-    public boolean set(final DataRange range) {
-        if (!super.set(range)) {
-            return false;
-        }
-        notifyRangeChange();
-        return true;
-    }
-
-    @Override
-    public boolean set(final double min, final double max) {
-        final boolean a = super.setMin(min);
-        final boolean b = super.setMax(max);
-        if (a || b) {
-            notifyRangeChange();
-            return true;
-        }
-        return false;
-    }
-
-    @Override
     public final boolean set(final String axisName, final String... axisUnit) {
         boolean namesHaveChanged = !strEqual(name, axisName);
         name = axisName;
-        if ((axisUnit != null) && (axisUnit.length > 0) && !strEqual(unit, axisUnit[0])) {
+        if ((axisUnit.length > 0) && !strEqual(unit, axisUnit[0])) {
             unit = axisUnit[0];
             namesHaveChanged = true;
             if (axisUnit.length > 1) {
@@ -249,7 +151,7 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
             }
         }
         if (namesHaveChanged) {
-            notifyNameChange();
+            notifyNameChanged.run();
         }
         return false;
     }
@@ -257,23 +159,23 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
     @Override
     public final boolean set(final String axisName, final String axisUnit, final double rangeMin,
             final double rangeMax) {
-        final boolean namesHaveChanged = !strEqual(name, axisName) || !strEqual(unit, axisUnit);
-        name = axisName;
-        unit = axisUnit;
+        boolean rangeChanged = set(rangeMin, rangeMax);
+        boolean nameChanged = set(axisName, axisUnit);
+        return rangeChanged || nameChanged;
+    }
 
-        boolean rangeHasChanged = false;
-        if ((getMin() != rangeMin) || (getMax() != rangeMax)) {
-            rangeHasChanged = true;
-            set(rangeMin, rangeMax);
+    /**
+     * Adds value to this range.
+     *
+     * @param value value to be added
+     * @return <code>true</code> if the value becomes <code>min</code> or <code>max</code>.
+     */
+    @Override
+    public boolean add(final double value) {
+        if (!super.add(value)) {
+            return false;
         }
-
-        if (namesHaveChanged && rangeHasChanged) {
-            notifyFullChange();
-        } else if (namesHaveChanged) {
-            notifyNameChange();
-        } else if (rangeHasChanged) {
-            notifyRangeChange();
-        }
+        notifyRangeChanged.run();
         return true;
     }
 
@@ -282,8 +184,9 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
         if (!super.setMax(max)) {
             return false;
         }
-
-        notifyRangeChange();
+        if (notifyRangeChanged != null) { // called from parent initializer
+            notifyRangeChanged.run();
+        }
         return true;
     }
 
@@ -292,8 +195,9 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
         if (!super.setMin(min)) {
             return false;
         }
-
-        notifyRangeChange();
+        if (notifyRangeChanged != null) { // called from parent initializer
+            notifyRangeChanged.run();
+        }
         return true;
     }
 
@@ -303,20 +207,8 @@ public class DefaultAxisDescription extends DataRange implements AxisDescription
     }
 
     @Override
-    public List<EventListener> updateEventListener() {
-        return updateListeners;
-    }
-
-    private void notifyFullChange() {
-        invokeListener(new AxisChangeEvent(this, "updated axis for '" + name + "' '[" + unit + "]'", getDimIndex()));
-    }
-
-    private void notifyNameChange() {
-        invokeListener(new AxisNameChangeEvent(this, "updated axis names for '" + name + "' '[" + unit + "]'", getDimIndex()));
-    }
-
-    private void notifyRangeChange() {
-        invokeListener(new AxisRangeChangeEvent(this, updateMessage(), getDimIndex()));
+    public BitState getBitState() {
+        return state;
     }
 
     private String updateMessage() {

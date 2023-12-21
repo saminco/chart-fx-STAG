@@ -5,18 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
-
-import io.fair_acc.chartfx.renderer.spi.utils.ColorGradient;
-import javafx.collections.ObservableList;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 
 import org.junit.jupiter.api.Test;
 
-import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.renderer.ContourType;
 import io.fair_acc.chartfx.renderer.datareduction.ReductionType;
+import io.fair_acc.chartfx.renderer.spi.utils.ColorGradient;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
 import io.fair_acc.dataset.DataSet;
 
 /**
@@ -74,12 +71,12 @@ public class AbstractContourDataSetRendererParameterTests {
      */
     public static class TestContourDataSetRendererParameter extends AbstractContourDataSetRendererParameter<TestContourDataSetRendererParameter> {
         @Override
-        public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-            throw new UnsupportedOperationException();
+        public boolean drawLegendSymbol(DataSetNode dataSet, Canvas canvas) {
+            return super.drawLegendSymbol(dataSet, canvas);
         }
 
         @Override
-        public List<DataSet> render(GraphicsContext gc, Chart chart, int dataSetOffset, ObservableList<DataSet> datasets) {
+        protected void render(GraphicsContext gc, DataSet dataSet, DataSetNode style) {
             throw new UnsupportedOperationException();
         }
 

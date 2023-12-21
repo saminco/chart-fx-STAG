@@ -1,7 +1,5 @@
 package io.fair_acc.chartfx.axes;
 
-import java.util.List;
-
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
@@ -9,18 +7,18 @@ import javafx.beans.property.StringProperty;
 import javafx.collections.ObservableList;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Paint;
-import javafx.scene.text.Font;
 import javafx.util.StringConverter;
 
+import io.fair_acc.bench.Measurable;
 import io.fair_acc.chartfx.axes.spi.AxisRange;
 import io.fair_acc.chartfx.axes.spi.MetricPrefix;
 import io.fair_acc.chartfx.axes.spi.TickMark;
+import io.fair_acc.chartfx.ui.css.LineStyle;
+import io.fair_acc.chartfx.ui.css.TextStyle;
 import io.fair_acc.chartfx.ui.geometry.Side;
 import io.fair_acc.dataset.AxisDescription;
-import io.fair_acc.dataset.event.UpdateEvent;
 
-public interface Axis extends AxisDescription {
+public interface Axis extends AxisDescription, Measurable.EmptyDefault {
     /**
      * This is true when the axis determines its range from the data automatically
      *
@@ -48,6 +46,12 @@ public interface Axis extends AxisDescription {
      * @param axisHeight the axis height in pixel (N.B. padding is being added)
      */
     void drawAxis(GraphicsContext gc, double axisWidth, double axisHeight);
+
+    /**
+     * Draws the axis into the axis Canvas. This needs to be called from the containing Chart and
+     * before drawing other items. The axis may omit drawing if nothing has changed.
+     */
+    void drawAxis();
 
     /**
      * forces redrawing of axis (via layoutChildren()). This is used to force an update while the main chart area is
@@ -105,17 +109,32 @@ public interface Axis extends AxisDescription {
      */
     Side getSide();
 
-    /**
-     * @return the fill for all tick labels
-     */
-    Paint getTickLabelFill();
-
-    /**
-     * @return the font for all tick labels
-     */
-    Font getTickLabelFont();
-
     StringConverter<Number> getTickLabelFormatter();
+
+    /**
+     * @return the style for the axis label
+     */
+    TextStyle getAxisLabel();
+
+    /**
+     * @return the style for all tick labels
+     */
+    TextStyle getTickLabelStyle();
+
+    /**
+     * @return the style for all major tick marks
+     */
+    LineStyle getMajorTickStyle();
+
+    /**
+     * @return the style for all minor tick marks
+     */
+    LineStyle getMinorTickStyle();
+
+    /**
+     * @return the gap between the tick mark lines and the chart canvas
+     */
+    double getTickMarkGap();
 
     /**
      * @return the gap between tick labels and the tick mark lines
@@ -170,13 +189,11 @@ public interface Axis extends AxisDescription {
     double getZeroPosition();
 
     /**
-     * Called when data has changed and the range may not be valid any more. This is only called by the chart if
+     * Called when data has changed and the range may not be valid anymore. This is only called by the chart if
      * isAutoRanging() returns true. If we are auto ranging it will cause layout to be requested and auto ranging to
      * happen on next layout pass.
-     *
-     * @param data The current set of all data that needs to be plotted on this axis
      */
-    void invalidateRange(List<Number> data);
+    void invalidateRange();
 
     /**
      * This is {@code true} when the axis labels and data point order should be inverted
@@ -192,18 +209,6 @@ public interface Axis extends AxisDescription {
      * @return property
      */
     BooleanProperty invertAxisProperty();
-
-    /**
-     * invoke object within update listener list
-     *
-     * @param updateEvent the event the listeners are notified with
-     * @param executeParallel {@code true} execute event listener via parallel executor service
-     */
-    @Override
-    default void invokeListener(final UpdateEvent updateEvent, final boolean executeParallel) {
-        // implemented for forwarding purposes
-        AxisDescription.super.invokeListener(updateEvent, executeParallel);
-    }
 
     /**
      * This is true when the axis determines its range from the data automatically and grows it if necessary
@@ -351,4 +356,11 @@ public interface Axis extends AxisDescription {
      * @return the canvas of the axis
      */
     Canvas getCanvas();
+
+    /**
+     * Hook to manually update the cached axis transforms outside of the render loop.
+     * This is needed e.g. when plugins adjust the axes and at the same time need to perform
+     * transformations with the modified ranges.
+     */
+    default void updateCachedTransforms(){};
 }

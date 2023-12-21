@@ -1,6 +1,5 @@
 package io.fair_acc.chartfx.ui;
 
-import io.fair_acc.chartfx.Chart;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.value.ChangeListener;
@@ -16,6 +15,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+
+import io.fair_acc.chartfx.Chart;
 
 /**
  * tool bar for plugins to add their controls (if necessary)
@@ -121,13 +122,13 @@ public class ToolBarFlowPane extends FlowPane {
         });
         chart.toolBarPinnedProperty().addListener((obj, valOld, valNew) -> {
             if (valNew) {
-                chart.setPinnedSide(javafx.geometry.Side.TOP);
+                chart.getMenuPane().setPinnedSide(javafx.geometry.Side.TOP);
                 this.setBackground(new Background(new BackgroundFill(selectedColour, CornerRadii.EMPTY, Insets.EMPTY)));
             } else {
-                chart.setPinnedSide(null);
+                chart.getMenuPane().setPinnedSide(null);
                 this.setBackground(new Background(new BackgroundFill(defaultColour, CornerRadii.EMPTY, Insets.EMPTY)));
             }
-            chart.requestLayout();
+            chart.invalidate();
         });
     }
 

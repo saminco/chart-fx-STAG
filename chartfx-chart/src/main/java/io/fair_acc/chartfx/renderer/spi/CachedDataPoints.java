@@ -2,37 +2,35 @@ package io.fair_acc.chartfx.renderer.spi;
 
 import static io.fair_acc.dataset.DataSet.DIM_X;
 import static io.fair_acc.dataset.DataSet.DIM_Y;
+import static io.fair_acc.math.ArrayUtils.*;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-import io.fair_acc.chartfx.XYChartCss;
 import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.renderer.ErrorStyle;
 import io.fair_acc.chartfx.renderer.RendererDataReducer;
-import io.fair_acc.chartfx.utils.StyleParser;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetError;
 import io.fair_acc.dataset.DataSetError.ErrorType;
-import io.fair_acc.dataset.utils.ArrayCache;
 import io.fair_acc.dataset.utils.CachedDaemonThreadFactory;
-import io.fair_acc.dataset.utils.DoubleArrayCache;
+import io.fair_acc.dataset.utils.IndexedStringConsumer;
 import io.fair_acc.dataset.utils.ProcessingProfiler;
 import io.fair_acc.math.ArrayUtils;
 
 /**
- * package private class implementation (data point caching) required by ErrorDataSetRenderer local screen data point
+ * public class implementation (data point caching) required by ErrorDataSetRenderer local screen data point
  * cache (minimises re-allocation/garbage collection)
  *
  * @author rstein
  */
 @SuppressWarnings({ "PMD.TooManyMethods", "PMD.TooManyFields" }) // designated purpose of this class
-class CachedDataPoints {
-    private static final String STYLES2 = "styles";
-    private static final String SELECTED2 = "selected";
+public class CachedDataPoints {
     private static final double DEG_TO_RAD = Math.PI / 180.0;
 
     protected double[] xValues;
@@ -45,10 +43,8 @@ class CachedDataPoints {
     protected String[] styles;
     protected boolean xAxisInverted;
     protected boolean yAxisInverted;
-    protected String defaultStyle;
-    protected int dataSetIndex;
-    protected int dataSetStyleIndex;
     protected boolean allowForNaNs;
+    protected boolean hasStyles;
     protected ErrorType[] errorType;
     protected int indexMin;
     protected int indexMax;
@@ -67,21 +63,33 @@ class CachedDataPoints {
     protected int maxDataCount;
     protected int actualDataCount; // number of data points that remain after data reduction
 
-    public CachedDataPoints(final int indexMin, final int indexMax, final int dataLength, final boolean full) {
-        maxDataCount = dataLength;
-        xValues = DoubleArrayCache.getInstance().getArrayExact(maxDataCount);
-        yValues = DoubleArrayCache.getInstance().getArrayExact(maxDataCount);
-        styles = ArrayCache.getCachedStringArray(STYLES2, dataLength);
+    public void trim() {
+        xValues = clearIfLarger(xValues, maxDataCount);
+        yValues = clearIfLarger(yValues, maxDataCount);
+        errorYNeg = clearIfLarger(errorYNeg, maxDataCount);
+        errorYPos = clearIfLarger(errorYPos, maxDataCount);
+        errorXNeg = clearIfLarger(errorXNeg, maxDataCount);
+        errorXPos = clearIfLarger(errorXPos, maxDataCount);
+        selected = clearIfLarger(selected, maxDataCount);
+        styles = clearIfLarger(styles, maxDataCount);
+        errorType = clearIfLarger(errorType, 10); // depends on ds dimensions
+    }
+
+    public CachedDataPoints resizeMin(final int indexMin, final int indexMax, final int dataLength, final boolean useErrorsX) {
         this.indexMin = indexMin;
         this.indexMax = indexMax;
-        errorYNeg = DoubleArrayCache.getInstance().getArrayExact(maxDataCount);
-        errorYPos = DoubleArrayCache.getInstance().getArrayExact(maxDataCount);
-        if (full) {
-            errorXNeg = DoubleArrayCache.getInstance().getArrayExact(maxDataCount);
-            errorXPos = DoubleArrayCache.getInstance().getArrayExact(maxDataCount);
+        maxDataCount = dataLength;
+        xValues = ArrayUtils.resizeMin(xValues, dataLength);
+        yValues = ArrayUtils.resizeMin(yValues, dataLength);
+        errorYNeg = ArrayUtils.resizeMin(errorYNeg, dataLength);
+        errorYPos = ArrayUtils.resizeMin(errorYPos, dataLength);
+        if (useErrorsX) {
+            errorXNeg = ArrayUtils.resizeMin(errorXNeg, dataLength);
+            errorXPos = ArrayUtils.resizeMin(errorXPos, dataLength);
         }
-        selected = ArrayCache.getCachedBooleanArray(SELECTED2, dataLength);
-        ArrayUtils.fillArray(styles, null);
+        selected = ArrayUtils.resizeMin(selected, dataLength);
+        hasStyles = false; // Styles get updated in boundary condition.
+        return this;
     }
 
     protected void computeBoundaryVariables(final Axis xAxis, final Axis yAxis) {
@@ -116,66 +124,51 @@ class CachedDataPoints {
         }
     }
 
-    private void computeErrorStyles(final DataSet dataSet, final int min, final int max) {
-        // no error attached
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            for (int index = min; index < max; index++) {
-                styles[index] = dataSet.getStyle(index);
-            }
-        });
-    }
-
     private void computeFullPolar(final Axis yAxis, final DataSetError dataSet, final int min, final int max) {
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            for (int index = min; index < max; index++) {
-                final double x = dataSet.get(DIM_X, index);
-                final double y = dataSet.get(DIM_Y, index);
-                // check if error should be surrounded by Math.abs(..)
-                // to ensure that they are always positive
-                final double phi = x * DEG_TO_RAD;
-                final double r = maxRadius * Math.abs(1 - (yAxis.getDisplayPosition(y) / yRange));
-                xValues[index] = xZero + (r * Math.cos(phi));
-                yValues[index] = yZero + (r * Math.sin(phi));
+        for (int index = min; index < max; index++) {
+            final double x = dataSet.get(DIM_X, index);
+            final double y = dataSet.get(DIM_Y, index);
+            // check if error should be surrounded by Math.abs(..)
+            // to ensure that they are always positive
+            final double phi = x * DEG_TO_RAD;
+            final double r = maxRadius * Math.abs(1 - (yAxis.getDisplayPosition(y) / yRange));
+            xValues[index] = xZero + (r * Math.cos(phi));
+            yValues[index] = yZero + (r * Math.sin(phi));
 
-                // ignore errors (for now) -> TODO: add proper transformation
-                errorXNeg[index] = 0.0;
-                errorXPos[index] = 0.0;
-                errorYNeg[index] = 0.0;
-                errorYPos[index] = 0.0;
+            // ignore errors (for now) -> TODO: add proper transformation
+            errorXNeg[index] = 0.0;
+            errorXPos[index] = 0.0;
+            errorYNeg[index] = 0.0;
+            errorYPos[index] = 0.0;
 
-                if (!Double.isFinite(yValues[index])) {
-                    yValues[index] = yZero;
-                }
-                styles[index] = dataSet.getStyle(index);
+            if (!Double.isFinite(yValues[index])) {
+                yValues[index] = yZero;
             }
-        });
+        }
     }
 
     private void computeNoErrorPolar(final Axis yAxis, final DataSet dataSet, final int min, final int max) {
         // experimental transform euclidean to polar coordinates
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            for (int index = min; index < max; index++) {
-                final double x = dataSet.get(DIM_X, index);
-                final double y = dataSet.get(DIM_Y, index);
-                // check if error should be surrounded by Math.abs(..)
-                // to ensure that they are always positive
-                final double phi = x * DEG_TO_RAD;
-                final double r = maxRadius * Math.abs(1 - (yAxis.getDisplayPosition(y) / yRange));
-                xValues[index] = xZero + (r * Math.cos(phi));
-                yValues[index] = yZero + (r * Math.sin(phi));
+        for (int index = min; index < max; index++) {
+            final double x = dataSet.get(DIM_X, index);
+            final double y = dataSet.get(DIM_Y, index);
+            // check if error should be surrounded by Math.abs(..)
+            // to ensure that they are always positive
+            final double phi = x * DEG_TO_RAD;
+            final double r = maxRadius * Math.abs(1 - (yAxis.getDisplayPosition(y) / yRange));
+            xValues[index] = xZero + (r * Math.cos(phi));
+            yValues[index] = yZero + (r * Math.sin(phi));
 
-                if (!Double.isFinite(yValues[index])) {
-                    yValues[index] = yZero;
-                }
-                styles[index] = dataSet.getStyle(index);
+            if (!Double.isFinite(yValues[index])) {
+                yValues[index] = yZero;
             }
-        });
+        }
     }
 
-    protected void computeScreenCoordinates(final Axis xAxis, final Axis yAxis, final DataSet dataSet,
-            final int dsIndex, final int min, final int max, final ErrorStyle localRendErrorStyle,
+    protected void computeScreenCoordinates(final Axis xAxis, final Axis yAxis, DataSet dataSet, final DataSetNode style,
+            final int min, final int max, final ErrorStyle localRendErrorStyle,
             final boolean isPolarPlot, final boolean doAllowForNaNs) {
-        setBoundaryConditions(xAxis, yAxis, dataSet, dsIndex, min, max, localRendErrorStyle, isPolarPlot,
+        setBoundaryConditions(xAxis, yAxis, dataSet, style, min, max, localRendErrorStyle, isPolarPlot,
                 doAllowForNaNs);
 
         // compute data set to screen coordinates
@@ -204,14 +197,12 @@ class CachedDataPoints {
                 break;
             }
         }
-
-        computeErrorStyles(dataSet, min, max);
     }
 
-    protected void computeScreenCoordinatesInParallel(final Axis xAxis, final Axis yAxis, final DataSet dataSet,
-            final int dsIndex, final int min, final int max, final ErrorStyle localRendErrorStyle,
+    protected void computeScreenCoordinatesInParallel(final Axis xAxis, final Axis yAxis, final DataSet dataSet, final DataSetNode style,
+            final int min, final int max, final ErrorStyle localRendErrorStyle,
             final boolean isPolarPlot, final boolean doAllowForNaNs) {
-        setBoundaryConditions(xAxis, yAxis, dataSet, dsIndex, min, max, localRendErrorStyle, isPolarPlot,
+        setBoundaryConditions(xAxis, yAxis, dataSet, style, min, max, localRendErrorStyle, isPolarPlot,
                 doAllowForNaNs);
 
         // compute data set to screen coordinates
@@ -274,167 +265,152 @@ class CachedDataPoints {
     private void computeWithError(final Axis yAxis, final DataSet dataSet, final int dimIndex, final int min,
             final int max) {
         if (dataSet instanceof DataSetError) {
-            dataSet.lock().readLockGuardOptimistic(() -> {
-                final double[] values = dimIndex == DIM_X ? xValues : yValues;
-                final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
-                final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
-                final double minValue = dimIndex == DIM_X ? xMin : yMin;
-                final DataSetError ds = (DataSetError) dataSet;
-                for (int index = min; index < max; index++) {
-                    final double value = dataSet.get(dimIndex, index);
-
-                    values[index] = yAxis.getDisplayPosition(value);
-
-                    if (!Double.isNaN(values[index])) {
-                        valuesEN[index] = yAxis.getDisplayPosition(value - ds.getErrorNegative(dimIndex, index));
-                        valuesEP[index] = yAxis.getDisplayPosition(value + ds.getErrorPositive(dimIndex, index));
-                        continue;
-                    }
-                    values[index] = minValue;
-                    valuesEN[index] = minValue;
-                    valuesEP[index] = minValue;
-                }
-            });
-            return;
-        }
-
-        // default dataset
-        dataSet.lock().readLockGuardOptimistic(() -> {
             final double[] values = dimIndex == DIM_X ? xValues : yValues;
             final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
             final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
             final double minValue = dimIndex == DIM_X ? xMin : yMin;
-
+            final DataSetError ds = (DataSetError) dataSet;
             for (int index = min; index < max; index++) {
-                values[index] = yAxis.getDisplayPosition(dataSet.get(dimIndex, index));
-                if (Double.isFinite(values[index])) {
-                    valuesEN[index] = values[index];
-                    valuesEP[index] = values[index];
-                } else {
-                    values[index] = minValue;
-                    valuesEN[index] = minValue;
-                    valuesEP[index] = minValue;
+                final double value = dataSet.get(dimIndex, index);
+
+                values[index] = yAxis.getDisplayPosition(value);
+
+                if (!Double.isNaN(values[index])) {
+                    valuesEN[index] = yAxis.getDisplayPosition(value - ds.getErrorNegative(dimIndex, index));
+                    valuesEP[index] = yAxis.getDisplayPosition(value + ds.getErrorPositive(dimIndex, index));
+                    continue;
                 }
+                values[index] = minValue;
+                valuesEN[index] = minValue;
+                valuesEP[index] = minValue;
             }
-        });
+            return;
+        }
+
+        // default dataset
+        final double[] values = dimIndex == DIM_X ? xValues : yValues;
+        final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
+        final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
+        final double minValue = dimIndex == DIM_X ? xMin : yMin;
+
+        for (int index = min; index < max; index++) {
+            values[index] = yAxis.getDisplayPosition(dataSet.get(dimIndex, index));
+            if (Double.isFinite(values[index])) {
+                valuesEN[index] = values[index];
+                valuesEP[index] = values[index];
+            } else {
+                values[index] = minValue;
+                valuesEN[index] = minValue;
+                valuesEP[index] = minValue;
+            }
+        }
     }
 
     private void computeWithErrorAllowingNaNs(final Axis yAxis, final DataSet dataSet, final int dimIndex,
             final int min, final int max) {
         if (dataSet instanceof DataSetError) {
-            dataSet.lock().readLockGuardOptimistic(() -> {
-                final double[] values = dimIndex == DIM_X ? xValues : yValues;
-                final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
-                final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
-                final DataSetError ds = (DataSetError) dataSet;
-                for (int index = min; index < max; index++) {
-                    final double value = dataSet.get(dimIndex, index);
+            final double[] values = dimIndex == DIM_X ? xValues : yValues;
+            final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
+            final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
+            final DataSetError ds = (DataSetError) dataSet;
+            for (int index = min; index < max; index++) {
+                final double value = dataSet.get(dimIndex, index);
 
-                    if (!Double.isFinite(value)) {
-                        values[index] = Double.NaN;
-                        valuesEN[index] = Double.NaN;
-                        valuesEP[index] = Double.NaN;
-                        continue;
-                    }
-
-                    values[index] = yAxis.getDisplayPosition(value);
-                    valuesEN[index] = yAxis.getDisplayPosition(value - ds.getErrorNegative(dimIndex, index));
-                    valuesEP[index] = yAxis.getDisplayPosition(value + ds.getErrorPositive(dimIndex, index));
+                if (!Double.isFinite(value)) {
+                    values[index] = Double.NaN;
+                    valuesEN[index] = Double.NaN;
+                    valuesEP[index] = Double.NaN;
+                    continue;
                 }
-            });
+
+                values[index] = yAxis.getDisplayPosition(value);
+                valuesEN[index] = yAxis.getDisplayPosition(value - ds.getErrorNegative(dimIndex, index));
+                valuesEP[index] = yAxis.getDisplayPosition(value + ds.getErrorPositive(dimIndex, index));
+            }
             return;
         }
 
         // default dataset
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            final double[] values = dimIndex == DIM_X ? xValues : yValues;
-            final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
-            final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
+        final double[] values = dimIndex == DIM_X ? xValues : yValues;
+        final double[] valuesEN = dimIndex == DIM_X ? errorXNeg : errorYNeg;
+        final double[] valuesEP = dimIndex == DIM_X ? errorXPos : errorYPos;
 
-            for (int index = min; index < max; index++) {
-                values[index] = yAxis.getDisplayPosition(dataSet.get(dimIndex, index));
+        for (int index = min; index < max; index++) {
+            values[index] = yAxis.getDisplayPosition(dataSet.get(dimIndex, index));
 
-                if (Double.isFinite(values[index])) {
-                    valuesEN[index] = values[index];
-                    valuesEP[index] = values[index];
-                } else {
-                    values[index] = Double.NaN;
-                    valuesEN[index] = Double.NaN;
-                    valuesEP[index] = Double.NaN;
-                }
+            if (Double.isFinite(values[index])) {
+                valuesEN[index] = values[index];
+                valuesEP[index] = values[index];
+            } else {
+                values[index] = Double.NaN;
+                valuesEN[index] = Double.NaN;
+                valuesEP[index] = Double.NaN;
             }
-        });
+        }
     }
 
     private void computeWithNoError(final Axis axis, final DataSet dataSet, final int dimIndex, final int min,
             final int max) {
         // no error attached
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            final double[] values = dimIndex == DIM_X ? xValues : yValues;
-            final double minValue = dimIndex == DIM_X ? xMin : yMin;
-            for (int index = min; index < max; index++) {
-                final double value = dataSet.get(dimIndex, index);
+        final double[] values = dimIndex == DIM_X ? xValues : yValues;
+        final double minValue = dimIndex == DIM_X ? xMin : yMin;
+        for (int index = min; index < max; index++) {
+            final double value = dataSet.get(dimIndex, index);
 
-                values[index] = axis.getDisplayPosition(value);
+            values[index] = axis.getDisplayPosition(value);
 
-                if (Double.isNaN(values[index])) {
-                    yValues[index] = minValue;
-                }
+            if (Double.isNaN(values[index])) {
+                yValues[index] = minValue;
             }
+        }
 
-            if ((dimIndex == DIM_Y) && (rendererErrorStyle != ErrorStyle.NONE)) {
-                System.arraycopy(values, min, errorYNeg, min, max - min);
-                System.arraycopy(values, min, errorYPos, min, max - min);
-            }
-        });
+        if ((dimIndex == DIM_Y) && (rendererErrorStyle != ErrorStyle.NONE)) {
+            System.arraycopy(values, min, errorYNeg, min, max - min);
+            System.arraycopy(values, min, errorYPos, min, max - min);
+        }
     }
 
     private void computeWithNoErrorAllowingNaNs(final Axis axis, final DataSet dataSet, final int dimIndex,
             final int min, final int max) {
         // no error attached
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            final double[] values = dimIndex == DIM_X ? xValues : yValues;
-            for (int index = min; index < max; index++) {
-                final double value = dataSet.get(dimIndex, index);
+        final double[] values = dimIndex == DIM_X ? xValues : yValues;
+        for (int index = min; index < max; index++) {
+            final double value = dataSet.get(dimIndex, index);
 
-                if (Double.isFinite(value)) {
-                    values[index] = axis.getDisplayPosition(value);
-                } else {
-                    values[index] = Double.NaN;
-                }
+            if (Double.isFinite(value)) {
+                values[index] = axis.getDisplayPosition(value);
+            } else {
+                values[index] = Double.NaN;
             }
+        }
 
-            if ((dimIndex == DIM_Y) && (rendererErrorStyle != ErrorStyle.NONE)) {
-                System.arraycopy(values, min, errorYNeg, min, max - min);
-                System.arraycopy(values, min, errorYPos, min, max - min);
-            }
-        });
+        if ((dimIndex == DIM_Y) && (rendererErrorStyle != ErrorStyle.NONE)) {
+            System.arraycopy(values, min, errorYNeg, min, max - min);
+            System.arraycopy(values, min, errorYPos, min, max - min);
+        }
     }
 
     private void computeYonlyPolar(final Axis yAxis, final DataSet dataSet, final int min, final int max) {
-        dataSet.lock().readLockGuardOptimistic(() -> {
-            for (int index = min; index < max; index++) {
-                final double x = dataSet.get(DIM_X, index);
-                final double y = dataSet.get(DIM_Y, index);
-                // check if error should be surrounded by Math.abs(..)
-                // to ensure that they are always positive
-                final double phi = x * DEG_TO_RAD;
-                final double r = maxRadius * Math.abs(1 - (yAxis.getDisplayPosition(y) / yRange));
-                xValues[index] = xZero + (r * Math.cos(phi));
-                yValues[index] = yZero + (r * Math.sin(phi));
+        for (int index = min; index < max; index++) {
+            final double x = dataSet.get(DIM_X, index);
+            final double y = dataSet.get(DIM_Y, index);
+            // check if error should be surrounded by Math.abs(..)
+            // to ensure that they are always positive
+            final double phi = x * DEG_TO_RAD;
+            final double r = maxRadius * Math.abs(1 - (yAxis.getDisplayPosition(y) / yRange));
+            xValues[index] = xZero + (r * Math.cos(phi));
+            yValues[index] = yZero + (r * Math.sin(phi));
 
-                // ignore errors (for now) -> TODO: add proper transformation
-                errorXNeg[index] = 0.0;
-                errorXPos[index] = 0.0;
-                errorYNeg[index] = 0.0;
-                errorYPos[index] = 0.0;
+            // ignore errors (for now) -> TODO: add proper transformation
+            errorXNeg[index] = 0.0;
+            errorXPos[index] = 0.0;
+            errorYNeg[index] = 0.0;
+            errorYPos[index] = 0.0;
 
-                if (!Double.isFinite(yValues[index])) {
-                    yValues[index] = yZero;
-                }
-                styles[index] = dataSet.getStyle(index);
+            if (!Double.isFinite(yValues[index])) {
+                yValues[index] = yZero;
             }
-        });
+        }
     }
 
     /**
@@ -513,18 +489,7 @@ class CachedDataPoints {
         minDataPointDistanceX();
     }
 
-    public void release() {
-        DoubleArrayCache.getInstance().add(xValues);
-        DoubleArrayCache.getInstance().add(yValues);
-        DoubleArrayCache.getInstance().add(errorYNeg);
-        DoubleArrayCache.getInstance().add(errorYPos);
-        DoubleArrayCache.getInstance().add(errorXNeg);
-        DoubleArrayCache.getInstance().add(errorXPos);
-        ArrayCache.release(SELECTED2, selected);
-        ArrayCache.release(STYLES2, styles);
-    }
-
-    private void setBoundaryConditions(final Axis xAxis, final Axis yAxis, final DataSet dataSet, final int dsIndex,
+    private void setBoundaryConditions(final Axis xAxis, final Axis yAxis, DataSet dataSet, final DataSetNode style,
             final int min, final int max, final ErrorStyle rendererErrorStyle, final boolean isPolarPlot,
             final boolean doAllowForNaNs) {
         indexMin = min;
@@ -533,18 +498,28 @@ class CachedDataPoints {
         this.allowForNaNs = doAllowForNaNs;
         this.rendererErrorStyle = rendererErrorStyle;
 
+        // set optional styles
+        hasStyles = dataSet.hasStyles();
+        if (hasStyles) {
+            styles = ArrayUtils.resizeMinNulled(styles, maxDataCount, String[] ::new);
+            dataSet.forEachStyle(min, max, styleSetter);
+        } else {
+            // For now we still need to allocate the array to not break other code
+            // (e.g. reducer). TODO: remove unnecessary array
+            styles = ArrayUtils.resizeMin(styles, maxDataCount, String[] ::new, false);
+        }
+
         computeBoundaryVariables(xAxis, yAxis);
-        setStyleVariable(dataSet, dsIndex);
         setErrorType(dataSet, rendererErrorStyle);
     }
+    private final IndexedStringConsumer styleSetter = (i, style) -> styles[i] = style;
 
     protected void setErrorType(final DataSet dataSet, final ErrorStyle errorStyle) {
-        errorType = new ErrorType[dataSet.getDimension()];
+        errorType = ArrayUtils.resizeMinNulled(errorType, dataSet.getDimension(), ErrorType[] ::new);
         if (dataSet instanceof DataSetError) {
             final DataSetError ds = (DataSetError) dataSet;
             for (int dimIndex = 0; dimIndex < ds.getDimension(); dimIndex++) {
-                final int tmpIndex = dimIndex;
-                errorType[dimIndex] = dataSet.lock().readLockGuardOptimistic(() -> ds.getErrorType(tmpIndex));
+                errorType[dimIndex] = ds.getErrorType(dimIndex);
             }
         } else if (errorStyle == ErrorStyle.NONE) {
             // special case where users does not want error bars
@@ -565,15 +540,5 @@ class CachedDataPoints {
                 errorType[dimIndex] = dimIndex == DIM_Y ? ErrorType.ASYMMETRIC : ErrorType.NO_ERROR;
             }
         }
-    }
-
-    protected void setStyleVariable(final DataSet dataSet, final int dsIndex) {
-        dataSet.lock().readLockGuardOptimistic(() -> defaultStyle = dataSet.getStyle());
-        final Integer layoutOffset = StyleParser.getIntegerPropertyValue(defaultStyle,
-                XYChartCss.DATASET_LAYOUT_OFFSET);
-        final Integer dsIndexLocal = StyleParser.getIntegerPropertyValue(defaultStyle, XYChartCss.DATASET_INDEX);
-
-        dataSetStyleIndex = layoutOffset == null ? 0 : layoutOffset;
-        dataSetIndex = dsIndexLocal == null ? dsIndex : dsIndexLocal;
     }
 }

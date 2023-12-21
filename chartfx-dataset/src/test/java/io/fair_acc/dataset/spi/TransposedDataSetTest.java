@@ -9,11 +9,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
 import io.fair_acc.dataset.AxisDescription;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.GridDataSet;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 /**
  * @author Alexander Krimm
@@ -98,10 +99,6 @@ class TransposedDataSetTest {
         assertEquals("fx-color: red", transposed2.getStyle());
         assertNull(transposed2.getStyle(0));
         assertNull(transposed2.getDataLabel(0));
-        // visibility
-        assertTrue(transposed2.isVisible());
-        transposed2.setVisible(false);
-        assertFalse(transposed2.isVisible());
     }
 
     @Test

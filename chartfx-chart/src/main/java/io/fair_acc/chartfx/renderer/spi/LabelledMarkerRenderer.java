@@ -1,35 +1,22 @@
 package io.fair_acc.chartfx.renderer.spi;
 
-import java.security.InvalidParameterException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
-import javafx.collections.ObservableList;
 import javafx.geometry.Orientation;
-import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
-import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.XYChart;
-import io.fair_acc.chartfx.XYChartCss;
 import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.renderer.Renderer;
-import io.fair_acc.chartfx.utils.StyleParser;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.DataSetStyleParser;
 import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.utils.ProcessingProfiler;
 
 /**
  * Draws horizontal markers with horizontal (default) labels attached at the top.
@@ -38,7 +25,7 @@ import io.fair_acc.dataset.utils.ProcessingProfiler;
  *
  * Points without any label data are ignored by the renderer.
  */
-public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMarkerRenderer> implements Renderer {
+public class LabelledMarkerRenderer extends AbstractRendererXY<LabelledMarkerRenderer> implements Renderer {
     private static final Logger LOGGER = LoggerFactory.getLogger(LabelledMarkerRenderer.class);
     private static final String STYLE_CLASS_LABELLED_MARKER = "chart-labelled-marker";
     private static final String DEFAULT_FONT = "Helvetica";
@@ -46,7 +33,6 @@ public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMa
     private static final Color DEFAULT_GRID_LINE_COLOR = Color.GREEN;
     private static final double DEFAULT_GRID_LINE_WIDTH = 1;
     private static final double[] DEFAULT_GRID_DASH_PATTERM = { 3.0, 3.0 };
-    protected final StringProperty style = new SimpleStringProperty(this, "style", null);
     protected final BooleanProperty verticalMarker = new SimpleBooleanProperty(this, "verticalMarker", true);
     protected final BooleanProperty horizontalMarker = new SimpleBooleanProperty(this, "horizontalMarker", false);
     protected Paint strokeColorMarker = LabelledMarkerRenderer.DEFAULT_GRID_LINE_COLOR;
@@ -110,12 +96,6 @@ public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMa
             }
         }
         gc.restore();
-    }
-
-    @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        // not applicable
-        return null;
     }
 
     /**
@@ -191,10 +171,6 @@ public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMa
         return getThis();
     }
 
-    public String getStyle() {
-        return styleProperty().get();
-    }
-
     @Override
     protected LabelledMarkerRenderer getThis() {
         return this;
@@ -213,119 +189,37 @@ public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMa
     }
 
     @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset,
-            final ObservableList<DataSet> datasets) {
-        final long start = ProcessingProfiler.getTimeStamp();
-        if (!(chart instanceof XYChart)) {
-            throw new InvalidParameterException(
-                    "must be derivative of XYChart for renderer - " + this.getClass().getSimpleName());
-        }
-        final XYChart xyChart = (XYChart) chart;
+    protected void render(final GraphicsContext gc, final DataSet dataSet, final DataSetNode style) {
+        // check for potentially reduced data range we are supposed to plot
+        final int indexMin = Math.max(0, dataSet.getIndex(DataSet.DIM_X, xMin));
+        final int indexMax = Math.min(dataSet.getIndex(DataSet.DIM_X, xMax) + 1,
+                dataSet.getDataCount());
 
-        // make local copy and add renderer specific data sets
-        final List<DataSet> localDataSetList = new ArrayList<>(datasets);
-        // N.B. only render data sets that are directly attached to this
-        // renderer
-        localDataSetList.addAll(getDatasets());
-
-        // If there are no data sets
-        if (localDataSetList.isEmpty()) {
-            return Collections.emptyList();
+        // return if zero length data set
+        if (indexMax - indexMin <= 0) {
+            return;
         }
 
-        Axis xAxis = this.getFirstAxis(Orientation.HORIZONTAL);
-        if (xAxis == null) {
-            xAxis = xyChart.getFirstAxis(Orientation.HORIZONTAL);
+        if (isHorizontalMarker()) {
+            // draw horizontal marker
+            drawHorizontalLabelledMarker(gc, getChart(), dataSet, indexMin, indexMax);
         }
-        if (xAxis == null) {
-            if (LOGGER.isWarnEnabled()) {
-                LOGGER.atWarn().addArgument(LabelledMarkerRenderer.class.getSimpleName()).log("{}::render(...) getFirstAxis(HORIZONTAL) returned null skip plotting");
-            }
-            return Collections.emptyList();
+
+        if (isVerticalMarker()) {
+            // draw vertical marker
+            drawVerticalLabelledMarker(gc, getChart(), dataSet, indexMin, indexMax);
         }
-        final double xAxisWidth = xAxis.getWidth();
-        final double xMin = xAxis.getValueForDisplay(0);
-        final double xMax = xAxis.getValueForDisplay(xAxisWidth);
-
-        // N.B. importance of reverse order: start with last index, so that
-        // most(-like) important DataSet is drawn on top of the others
-
-        List<DataSet> drawnDataSet = new ArrayList<>(localDataSetList.size());
-        for (int dataSetIndex = localDataSetList.size() - 1; dataSetIndex >= 0; dataSetIndex--) {
-            final DataSet dataSet = localDataSetList.get(dataSetIndex);
-            if (!dataSet.isVisible()) {
-                continue;
-            }
-            dataSet.lock().readLockGuard(() -> {
-                // check for potentially reduced data range we are supposed to plot
-                final int indexMin = Math.max(0, dataSet.getIndex(DataSet.DIM_X, xMin));
-                final int indexMax = Math.min(dataSet.getIndex(DataSet.DIM_X, xMax) + 1,
-                        dataSet.getDataCount());
-
-                // return if zero length data set
-                if (indexMax - indexMin <= 0) {
-                    return;
-                }
-
-                drawnDataSet.add(dataSet);
-                if (isHorizontalMarker()) {
-                    // draw horizontal marker
-                    drawHorizontalLabelledMarker(gc, xyChart, dataSet, indexMin, indexMax);
-                }
-
-                if (isVerticalMarker()) {
-                    // draw vertical marker
-                    drawVerticalLabelledMarker(gc, xyChart, dataSet, indexMin, indexMax);
-                }
-            });
-
-        } // end of 'dataSetIndex' loop
-
-        ProcessingProfiler.getTimeDiff(start);
-        return drawnDataSet;
     }
 
     protected void setGraphicsContextAttributes(final GraphicsContext gc, final String style) {
-        final Color strokeColor = StyleParser.getColorPropertyValue(style, XYChartCss.STROKE_COLOR);
-        if (strokeColor == null) {
-            gc.setStroke(strokeColorMarker);
-        } else {
-            gc.setStroke(strokeColor);
+        if (!styleParser.tryParse(style)) {
+            return;
         }
-
-        final Color fillColor = StyleParser.getColorPropertyValue(style, XYChartCss.FILL_COLOR);
-        if (fillColor == null) {
-            gc.setFill(strokeColorMarker);
-        } else {
-            gc.setFill(fillColor);
-        }
-
-        final Double strokeWidth = StyleParser.getFloatingDecimalPropertyValue(style, XYChartCss.STROKE_WIDTH);
-        gc.setLineWidth(Objects.requireNonNullElseGet(strokeWidth, () -> strokeLineWidthMarker));
-
-        final Font font = StyleParser.getFontPropertyValue(style);
-        if (font == null) {
-            gc.setFont(Font.font(LabelledMarkerRenderer.DEFAULT_FONT, LabelledMarkerRenderer.DEFAULT_FONT_SIZE));
-        } else {
-            gc.setFont(font);
-        }
-
-        final double[] dashPattern = StyleParser.getFloatingDecimalArrayPropertyValue(style,
-                XYChartCss.STROKE_DASH_PATTERN);
-        if (dashPattern == null) {
-            gc.setLineDashes(strokeDashPattern);
-        } else {
-            gc.setLineDashes(dashPattern);
-        }
-    }
-
-    public LabelledMarkerRenderer setStyle(final String newStyle) {
-        styleProperty().set(newStyle);
-        return getThis();
-    }
-
-    public StringProperty styleProperty() {
-        return style;
+        styleParser.getLineColor().ifPresent(gc::setStroke);
+        styleParser.getLineWidth().ifPresent(gc::setLineWidth);
+        styleParser.getLineDashes().ifPresent(gc::setLineDashes);
+        styleParser.getMarkerColor().ifPresent(gc::setFill);
+        styleParser.getFontFull().ifPresent(gc::setFont);
     }
 
     public final LabelledMarkerRenderer updateCSS() {
@@ -338,9 +232,9 @@ public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMa
         strokeLineWidthMarker = LabelledMarkerRenderer.DEFAULT_GRID_LINE_WIDTH;
         strokeDashPattern = LabelledMarkerRenderer.DEFAULT_GRID_DASH_PATTERM;
 
-        //if (getStyle() != null) {
-        //    parse user-specified marker
-        //}
+        // if (getStyle() != null) {
+        //     parse user-specified marker
+        // }
 
         return getThis();
     }
@@ -348,4 +242,6 @@ public class LabelledMarkerRenderer extends AbstractDataSetManagement<LabelledMa
     public BooleanProperty verticalMarkerProperty() {
         return verticalMarker;
     }
+
+    private static final DataSetStyleParser styleParser = DataSetStyleParser.newInstance();
 }

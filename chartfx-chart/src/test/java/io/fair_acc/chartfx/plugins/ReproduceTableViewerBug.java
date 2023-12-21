@@ -25,7 +25,7 @@ import io.fair_acc.dataset.utils.ProcessingProfiler;
 /**
  * Reproduces the NPE bug in the table viewer.
  * It seems to trigger <a href="https://bugs.openjdk.java.net/browse/JDK-8217953">JDK-8217953</a>.
- * 
+ *
  * @author Alexander Krimm
  */
 public class ReproduceTableViewerBug extends Application {
@@ -97,7 +97,7 @@ public class ReproduceTableViewerBug extends Application {
         final XYChart chart = new XYChart();
         chart.getXAxis().setName("x axis");
         chart.getYAxis().setName("y axis");
-        chart.legendVisibleProperty().set(true);
+        chart.getLegend().getNode().visibleProperty().set(true);
         // set them false to make the plot faster
         chart.setAnimated(false);
         final TableViewer tableViewer = new TableViewer();

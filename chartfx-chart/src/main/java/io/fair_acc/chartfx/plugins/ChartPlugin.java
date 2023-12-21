@@ -22,6 +22,7 @@ import javafx.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.fair_acc.bench.Measurable;
 import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.Axis;
@@ -40,7 +41,7 @@ import io.fair_acc.dataset.spi.utils.Tuple;
  * @author braeun - modified to be able to use XYChart class
  * @author rstein - modified to new Chart, XYChart API
  */
-public abstract class ChartPlugin {
+public abstract class ChartPlugin implements Measurable.EmptyDefault {
     private static final Logger LOGGER = LoggerFactory.getLogger(ChartPlugin.class);
     private final ObservableList<Node> chartChildren = FXCollections.observableArrayList();
     private final List<Pair<EventType<? extends InputEvent>, EventHandler<? extends InputEvent>>> mouseEventHandlers = new LinkedList<>();
@@ -187,9 +188,23 @@ public abstract class ChartPlugin {
     }
 
     /**
+     * Optional method that allows plug-in make layout changes after axes and dataset limits are known
+     */
+    public void runPreLayout() { // #NOPMD
+        // empty by default
+    }
+
+    /**
      * Optional method that allows the plug-in to react in case the size of the chart that it belongs to has changed.
      */
     public void layoutChildren() { // #NOPMD
+        // empty by default
+    }
+
+    /**
+     * Optional method that allows plug-in render something after axes and charts have been rendered
+     */
+    public void runPostLayout() { // #NOPMD
         // empty by default
     }
 

@@ -1,41 +1,36 @@
 package io.fair_acc.chartfx.renderer.spi;
 
-import java.security.InvalidParameterException;
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 import javafx.beans.property.BooleanProperty;
-import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.collections.SetChangeListener;
 import javafx.css.CssMetaData;
 import javafx.css.PseudoClass;
 import javafx.css.Styleable;
+import javafx.css.StyleableBooleanProperty;
 import javafx.geometry.VPos;
-import javafx.scene.Group;
 import javafx.scene.Node;
-import javafx.scene.Scene;
-import javafx.scene.canvas.Canvas;
+import javafx.scene.Parent;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.layout.Pane;
-import javafx.scene.shape.Line;
 import javafx.scene.text.TextAlignment;
 
-import io.fair_acc.chartfx.Chart;
+import io.fair_acc.bench.DurationMeasure;
+import io.fair_acc.bench.MeasurementRecorder;
 import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.Axis;
+import io.fair_acc.chartfx.axes.spi.AxisRange;
 import io.fair_acc.chartfx.axes.spi.TickMark;
 import io.fair_acc.chartfx.renderer.Renderer;
 import io.fair_acc.chartfx.renderer.spi.utils.DashPatternStyle;
+import io.fair_acc.chartfx.ui.css.*;
 import io.fair_acc.dataset.DataSet;
+import io.fair_acc.dataset.utils.AssertUtils;
 import io.fair_acc.dataset.utils.NoDuplicatesList;
 
 @SuppressWarnings("PMD.GodClass")
-public class GridRenderer extends Pane implements Renderer {
+public class GridRenderer extends Parent implements Renderer {
     private static final double DEG_TO_RAD = Math.PI / 180.0;
-    private static final String CHART_CSS = Objects.requireNonNull(Chart.class.getResource("chart.css")).toExternalForm();
     private static final String STYLE_CLASS_GRID_RENDERER = "grid-renderer";
     private static final String STYLE_CLASS_MAJOR_GRID_LINE = "chart-major-grid-lines";
     private static final String STYLE_CLASS_MAJOR_GRID_LINE_H = "chart-major-horizontal-lines";
@@ -44,78 +39,24 @@ public class GridRenderer extends Pane implements Renderer {
     private static final String STYLE_CLASS_MINOR_GRID_LINE_H = "chart-minor-horizontal-lines";
     private static final String STYLE_CLASS_MINOR_GRID_LINE_V = "chart-minor-vertical-lines";
     private static final String STYLE_CLASS_GRID_ON_TOP = "chart-grid-line-on-top";
-    private static final PseudoClass SELECTED_PSEUDO_CLASS = PseudoClass.getPseudoClass("withMinor");
+    private static final PseudoClass WITH_MINOR_PSEUDO_CLASS = PseudoClass.getPseudoClass("withMinor");
 
-    private static final double[] DEFAULT_GRID_DASH_PATTERM = { 4.5, 2.5 };
-    // protected final BooleanProperty drawGridOnTop = new
-    // SimpleStyleableBooleanProperty(StyleableProperties.GRID_ON_TOP,
-    // this, "drawGridOnTop", true);
-    private final Line horMajorGridStyleNode;
-    private final Line verMajorGridStyleNode;
-    private final Line horMinorGridStyleNode;
-    private final Line verMinorGridStyleNode;
-    private final Line drawGridOnTopNode;
-    private final Group gridStyleNodes = new Group();
+    private final StyleGroup styles = new StyleGroup(getChildren());
+    private final LineStyle horMajorGridStyleNode = styles.newLineStyle(STYLE_CLASS_MAJOR_GRID_LINE, STYLE_CLASS_MAJOR_GRID_LINE_H);
+    private final LineStyle verMajorGridStyleNode = styles.newLineStyle(STYLE_CLASS_MAJOR_GRID_LINE, STYLE_CLASS_MAJOR_GRID_LINE_V);
+    private final LineStyle horMinorGridStyleNode = styles.newLineStyle(STYLE_CLASS_MINOR_GRID_LINE, STYLE_CLASS_MINOR_GRID_LINE_H);
+    private final LineStyle verMinorGridStyleNode = styles.newLineStyle(STYLE_CLASS_MINOR_GRID_LINE, STYLE_CLASS_MINOR_GRID_LINE_V);
+    private final StyleableBooleanProperty drawGridOnTop = CSS.createBooleanProperty(this, "drawGridOnTop", true);
+
     protected final ObservableList<Axis> axesList = FXCollections.observableList(new NoDuplicatesList<>());
+    private final XYChart chart;
 
-    public GridRenderer() {
+    public GridRenderer(XYChart chart) {
         super();
-
-        getStyleClass().setAll(GridRenderer.STYLE_CLASS_GRID_RENDERER);
-        horMajorGridStyleNode = new Line();
-        horMajorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MAJOR_GRID_LINE);
-        horMajorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MAJOR_GRID_LINE_H);
-
-        verMajorGridStyleNode = new Line();
-        verMajorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MAJOR_GRID_LINE);
-        verMajorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MAJOR_GRID_LINE_V);
-
-        horMinorGridStyleNode = new Line();
-        horMinorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MINOR_GRID_LINE);
-        horMinorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MINOR_GRID_LINE_H);
-        horMinorGridStyleNode.setVisible(false);
-
-        verMinorGridStyleNode = new Line();
-        verMinorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MINOR_GRID_LINE);
-        verMinorGridStyleNode.getStyleClass().add(GridRenderer.STYLE_CLASS_MINOR_GRID_LINE_V);
-        verMinorGridStyleNode.setVisible(false);
-
-        drawGridOnTopNode = new Line();
-        drawGridOnTopNode.getStyleClass().add(GridRenderer.STYLE_CLASS_GRID_ON_TOP);
-        drawGridOnTopNode.getStyleClass().add(GridRenderer.STYLE_CLASS_GRID_ON_TOP);
-        drawGridOnTopNode.setVisible(true);
-
-        gridStyleNodes.getChildren().addAll(horMajorGridStyleNode, verMajorGridStyleNode, horMinorGridStyleNode,
-                verMinorGridStyleNode, drawGridOnTopNode);
-
-        getChildren().add(gridStyleNodes);
-        final Scene scene = new Scene(this);
-        scene.getStylesheets().add(GridRenderer.CHART_CSS);
-        gridStyleNodes.applyCss();
-        final SetChangeListener<? super PseudoClass> listener = evt -> gridStyleNodes.applyCss();
-        horMajorGridStyleNode.getPseudoClassStates().addListener(listener);
-        verMajorGridStyleNode.getPseudoClassStates().addListener(listener);
-        horMinorGridStyleNode.getPseudoClassStates().addListener(listener);
-        verMinorGridStyleNode.getPseudoClassStates().addListener(listener);
-        drawGridOnTopNode.getPseudoClassStates().addListener(listener);
-
-        ChangeListener<? super Boolean> change = (ob, o, n) -> {
-            horMajorGridStyleNode.pseudoClassStateChanged(GridRenderer.SELECTED_PSEUDO_CLASS,
-                    horMinorGridStyleNode.isVisible());
-            verMajorGridStyleNode.pseudoClassStateChanged(GridRenderer.SELECTED_PSEUDO_CLASS,
-                    verMinorGridStyleNode.isVisible());
-            drawGridOnTopNode.pseudoClassStateChanged(GridRenderer.SELECTED_PSEUDO_CLASS,
-                    drawGridOnTopNode.isVisible());
-        };
-
-        horizontalGridLinesVisibleProperty().addListener(change);
-        verticalGridLinesVisibleProperty().addListener(change);
-        drawOnTopProperty().addListener(change);
-    }
-
-    @Override
-    public String getUserAgentStylesheet() {
-        return GridRenderer.CHART_CSS;
+        this.chart = AssertUtils.notNull("chart", chart);
+        StyleUtil.hiddenStyleNode(this, STYLE_CLASS_GRID_RENDERER);
+        StyleUtil.applyPseudoClass(horMajorGridStyleNode, GridRenderer.WITH_MINOR_PSEUDO_CLASS, horMinorGridStyleNode.visibleProperty());
+        StyleUtil.applyPseudoClass(verMajorGridStyleNode, GridRenderer.WITH_MINOR_PSEUDO_CLASS, verMinorGridStyleNode.visibleProperty());
     }
 
     protected void drawEuclideanGrid(final GraphicsContext gc, XYChart xyChart) {
@@ -171,21 +112,6 @@ public class GridRenderer extends Pane implements Renderer {
         }
     }
 
-    @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        // not applicable
-        return null;
-    }
-
-    /**
-     * Indicates whether grid lines should be drawn on top or beneath graphs
-     *
-     * @return drawOnTop property
-     */
-    public final BooleanProperty drawOnTopProperty() {
-        return drawGridOnTopNode.visibleProperty();
-    }
-
     protected void drawPolarCircle(final GraphicsContext gc, final Axis yAxis, final double yRange,
             final double xCentre, final double yCentre, final double maxRadius) {
         if (!horMajorGridStyleNode.isVisible() && !horMinorGridStyleNode.isVisible()) {
@@ -207,8 +133,8 @@ public class GridRenderer extends Pane implements Renderer {
                 gc.strokeOval(xCentre - yNorm, yCentre - yNorm, 2 * yNorm, 2 * yNorm);
 
                 gc.save();
-                gc.setFont(yAxis.getTickLabelFont());
-                gc.setStroke(yAxis.getTickLabelFill());
+                gc.setFont(yAxis.getTickLabelStyle().getFont());
+                gc.setStroke(yAxis.getTickLabelStyle().getFill()); // TODO: why stroke rather than fill?
                 gc.setLineDashes((double[]) null);
                 gc.setTextBaseline(VPos.CENTER);
                 gc.strokeText(label, xCentre + (int) yAxis.getTickLabelGap(), yCentre - yNorm);
@@ -256,8 +182,8 @@ public class GridRenderer extends Pane implements Renderer {
                 gc.strokeLine(xCentre, yCentre, x, y);
 
                 gc.save();
-                gc.setFont(yAxis.getTickLabelFont());
-                gc.setStroke(yAxis.getTickLabelFill());
+                gc.setFont(yAxis.getTickLabelStyle().getFont());
+                gc.setStroke(yAxis.getTickLabelStyle().getFill()); // TODO: why stroke rather than fill?
                 gc.setLineDashes((double[]) null);
                 gc.setTextBaseline(VPos.CENTER);
                 if (phi < 350) {
@@ -333,18 +259,18 @@ public class GridRenderer extends Pane implements Renderer {
     }
 
     @Override
-    public List<CssMetaData<? extends Styleable, ?>> getCssMetaData() {
-        return GridRenderer.getClassCssMetaData();
-    }
-
-    @Override
     public ObservableList<DataSet> getDatasets() {
-        return null;
+        return FXCollections.emptyObservableList();
     }
 
     @Override
-    public ObservableList<DataSet> getDatasetsCopy() {
-        return null;
+    public ObservableList<DataSetNode> getDatasetNodes() {
+        return FXCollections.emptyObservableList();
+    }
+
+    @Override
+    public void updateAxisRange(Axis axis, AxisRange range) {
+        // not applicable
     }
 
     /**
@@ -352,7 +278,7 @@ public class GridRenderer extends Pane implements Renderer {
      *
      * @return the Line node to be styled
      */
-    public Line getHorizontalMajorGrid() {
+    public LineStyle getHorizontalMajorGrid() {
         return horMajorGridStyleNode;
     }
 
@@ -361,7 +287,7 @@ public class GridRenderer extends Pane implements Renderer {
      *
      * @return the Line node to be styled
      */
-    public Line getHorizontalMinorGrid() {
+    public LineStyle getHorizontalMinorGrid() {
         return horMinorGridStyleNode;
     }
 
@@ -370,7 +296,7 @@ public class GridRenderer extends Pane implements Renderer {
      *
      * @return the Line node to be styled
      */
-    public Line getVerticalMajorGrid() {
+    public LineStyle getVerticalMajorGrid() {
         return verMajorGridStyleNode;
     }
 
@@ -379,53 +305,8 @@ public class GridRenderer extends Pane implements Renderer {
      *
      * @return the Line node to be styled
      */
-    public Line getVerticalMinorGrid() {
+    public LineStyle getVerticalMinorGrid() {
         return verMinorGridStyleNode;
-    }
-
-    /**
-     * Indicates whether horizontal major grid lines are visible or not.
-     *
-     * @return verticalGridLinesVisible property
-     */
-    public final BooleanProperty horizontalGridLinesVisibleProperty() {
-        return horMajorGridStyleNode.visibleProperty();
-    }
-
-    /**
-     * Indicates whether horizontal minor grid lines are visible or not.
-     *
-     * @return verticalGridLinesVisible property
-     */
-    public final BooleanProperty horizontalMinorGridLinesVisibleProperty() {
-        return horMinorGridStyleNode.visibleProperty();
-    }
-
-    /**
-     * Indicates whether grid lines should be drawn on top or beneath graphs
-     *
-     * @return drawOnTop state
-     */
-    public final boolean isDrawOnTop() {
-        return drawGridOnTopNode.isVisible();
-    }
-
-    @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset,
-            final ObservableList<DataSet> datasets) {
-        if (!(chart instanceof XYChart)) {
-            throw new InvalidParameterException(
-                    "must be derivative of XYChart for renderer - " + this.getClass().getSimpleName());
-        }
-        final XYChart xyChart = (XYChart) chart;
-
-        if (xyChart.isPolarPlot()) {
-            drawPolarGrid(gc, xyChart);
-        } else {
-            drawEuclideanGrid(gc, xyChart);
-        }
-
-        return Collections.emptyList();
     }
 
     /**
@@ -434,7 +315,36 @@ public class GridRenderer extends Pane implements Renderer {
      * @param state true: draw on top
      */
     public final void setDrawOnTop(boolean state) {
-        drawGridOnTopNode.setVisible(state);
+        drawOnTopProperty().set(state);
+    }
+
+    /**
+     * Indicates whether grid lines should be drawn on top or beneath graphs
+     *
+     * @return drawOnTop state
+     */
+    public final boolean isDrawOnTop() {
+        return drawOnTopProperty().get();
+    }
+
+    /**
+     * Indicates whether grid lines should be drawn on top or beneath graphs
+     *
+     * @return drawOnTop property
+     */
+    public final BooleanProperty drawOnTopProperty() {
+        return drawGridOnTop;
+    }
+
+    @Override
+    public void render() {
+        benchDrawGrid.start();
+        if (chart.isPolarPlot()) {
+            drawPolarGrid(chart.getCanvas().getGraphicsContext2D(), chart);
+        } else {
+            drawEuclideanGrid(chart.getCanvas().getGraphicsContext2D(), chart);
+        }
+        benchDrawGrid.stop();
     }
 
     @Override
@@ -452,36 +362,38 @@ public class GridRenderer extends Pane implements Renderer {
         return null;
     }
 
-    /**
-     * Indicates whether vertical major grid lines are visible or not.
-     *
-     * @return verticalGridLinesVisible property
-     */
-    public final BooleanProperty verticalGridLinesVisibleProperty() {
-        return verMajorGridStyleNode.visibleProperty();
+    @Override
+    public void setGlobalIndexOffset(int value) {
     }
 
-    /**
-     * Indicates whether vertical minor grid lines are visible or not.
-     *
-     * @return verticalGridLinesVisible property
-     */
-    public final BooleanProperty verticalMinorGridLinesVisibleProperty() {
-        return verMinorGridStyleNode.visibleProperty();
+    @Override
+    public int getGlobalIndexOffset() {
+        return 0;
     }
 
-    protected static void applyGraphicsStyleFromLineStyle(final GraphicsContext gc, final Line style) {
-        gc.setStroke(style.getStroke());
-        gc.setLineWidth(style.getStrokeWidth());
-        if (style.getStrokeDashArray() == null || style.getStrokeDashArray().isEmpty()) {
-            gc.setLineDashes(DEFAULT_GRID_DASH_PATTERM);
-        } else {
-            final double[] dashes = style.getStrokeDashArray().stream().mapToDouble(d -> d).toArray();
-            gc.setLineDashes(dashes);
-        }
+    @Override
+    public List<CssMetaData<? extends Styleable, ?>> getCssMetaData() {
+        return getClassCssMetaData();
+    }
+
+    public static List<CssMetaData<? extends Styleable, ?>> getClassCssMetaData() {
+        return CSS.getCssMetaData();
+    }
+
+    private static final CssPropertyFactory<GridRenderer> CSS = new CssPropertyFactory<>(Parent.getClassCssMetaData());
+
+    protected static void applyGraphicsStyleFromLineStyle(final GraphicsContext gc, final LineStyle style) {
+        style.copyStyleTo(gc);
     }
 
     private static double snap(final double value) {
         return (int) value + 0.5;
     }
+
+    @Override
+    public void setRecorder(MeasurementRecorder recorder) {
+        benchDrawGrid = recorder.newDebugDuration("grid-drawGrid");
+    }
+
+    private DurationMeasure benchDrawGrid = DurationMeasure.DISABLED;
 }

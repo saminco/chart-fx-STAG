@@ -1,21 +1,20 @@
 package io.fair_acc.chartfx.axes.spi;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
+import javafx.geometry.VPos;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.Pane;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 
 import org.junit.jupiter.api.Assertions;
@@ -33,7 +32,8 @@ import io.fair_acc.chartfx.axes.LogAxisType;
 import io.fair_acc.chartfx.axes.spi.transforms.DefaultAxisTransform;
 import io.fair_acc.chartfx.legend.spi.DefaultLegend;
 import io.fair_acc.chartfx.ui.geometry.Side;
-import io.fair_acc.chartfx.utils.FXUtils;
+import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 @ExtendWith(ApplicationExtension.class)
 @ExtendWith(JavaFXInterceptorUtils.SelectiveJavaFxInterceptor.class)
@@ -72,8 +72,7 @@ class AbstractAxisTests {
 
         Assertions.assertDoesNotThrow(() -> axis.computeTickMarks(autoRange, false));
 
-        List<Number> numberList = Collections.unmodifiableList(axis.calculateMajorTickValues(DEFAULT_AXIS_LENGTH, autoRange));
-        axis.invalidateRange(new ArrayList<>(numberList));
+        axis.invalidateRange();
     }
 
     @Test
@@ -95,8 +94,8 @@ class AbstractAxisTests {
         assertDoesNotThrow(() -> axis.drawAxis(null, 100, 100));
         assertDoesNotThrow(() -> AbstractAxis.drawTickMarkLabel(gc, 10, 10, 1.0, new TickMark(Side.BOTTOM, 1.0, 1.0, 0.0, "label")));
         assertDoesNotThrow(() -> AbstractAxis.drawTickMarkLabel(gc, 10, 10, 0.9, new TickMark(Side.BOTTOM, 1.0, 1.0, 90.0, "label")));
-        axis.setTickMarkVisible(false);
-        axis.setMinorTickVisible(false);
+        axis.getMajorTickStyle().setVisible(false);
+        axis.getMinorTickStyle().setVisible(false);
         assertDoesNotThrow(() -> axis.drawAxis(gc, 100, 100));
     }
 
@@ -157,25 +156,79 @@ class AbstractAxisTests {
         AbstractAxis axis = new EmptyAbstractAxis(-5.0, 5.0);
         assertDoesNotThrow(() -> axis.clearAxisCanvas(axis.getCanvas().getGraphicsContext2D(), 100, 100));
 
+        axis.setUnit(null);
         axis.setSide(Side.BOTTOM);
         assertEquals(+1.0, axis.calculateNewScale(10, -5.0, +5.0));
-        assertEquals(+17, axis.computePrefHeight(100), 2);
+        assertEquals(+30, axis.computePrefHeight(100), 2);
         assertEquals(+150.0, axis.computePrefWidth(-1));
         axis.setSide(Side.LEFT);
         assertEquals(-1.0, axis.calculateNewScale(10, -5.0, +5.0));
         assertEquals(+150, axis.computePrefHeight(-1));
-        assertEquals(+22, axis.computePrefWidth(100), 2);
+        assertEquals(+26, axis.computePrefWidth(100), 2);
+
+        axis.setUnit("");
+        axis.setSide(Side.BOTTOM);
+        assertEquals(+49, axis.computePrefHeight(100), 2);
+        assertEquals(+150.0, axis.computePrefWidth(-1));
+        axis.setSide(Side.LEFT);
+        assertEquals(+150, axis.computePrefHeight(-1));
+        assertEquals(+48, axis.computePrefWidth(100), 2);
 
         assertDoesNotThrow(axis::clear);
         assertDoesNotThrow(axis::forceRedraw);
-        final AtomicInteger counter = new AtomicInteger();
-        assertDoesNotThrow(axis::fireInvalidated);
-        assertDoesNotThrow(() -> FXUtils.runAndWait(axis::fireInvalidated));
-        assertEquals(0, counter.get());
-        axis.addListener(evt -> counter.incrementAndGet());
-        assertDoesNotThrow(axis::fireInvalidated);
-        assertDoesNotThrow(() -> FXUtils.runAndWait(axis::fireInvalidated));
-        assertEquals(2, counter.get());
+    }
+
+    @Test
+    void calculateNewScale() {
+        AbstractAxis axis = new EmptyAbstractAxis(-5.0, 5.0);
+
+        axis.setSide(Side.BOTTOM);
+        assertEquals(1, axis.calculateNewScale(4, -2, 2));
+        assertEquals(-1, axis.calculateNewScale(0, -2, +2));
+        assertEquals(-2, axis.calculateNewScale(-20, -5, 5));
+        assertEquals(1, axis.calculateNewScale(4, -2, +2));
+        assertEquals(1, axis.calculateNewScale(1, +2, +2));
+        assertEquals(Double.NaN, axis.calculateNewScale(Double.NaN, -2, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, Double.NaN, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, -2, Double.NaN));
+        assertEquals(-1, axis.calculateNewScale(1, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
+        assertEquals(-1, axis.calculateNewScale(1, -2, Double.POSITIVE_INFINITY));
+        assertEquals(-1, axis.calculateNewScale(1, Double.NEGATIVE_INFINITY, +2));
+
+        axis.setSide(Side.LEFT);
+        assertEquals(-1, axis.calculateNewScale(4, -2, 2));
+        assertEquals(-1, axis.calculateNewScale(0, -2, +2));
+        assertEquals(2, axis.calculateNewScale(-20, -5, 5));
+        assertEquals(-1, axis.calculateNewScale(4, -2, +2));
+        assertEquals(-1, axis.calculateNewScale(1, +2, +2));
+        assertEquals(Double.NaN, axis.calculateNewScale(Double.NaN, -2, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, Double.NaN, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, -2, Double.NaN));
+        assertEquals(-1, axis.calculateNewScale(1, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
+
+        axis.setSide(Side.TOP);
+        axis.invertAxis(true);
+        assertEquals(1, axis.calculateNewScale(4, -2, 2));
+        assertEquals(-1, axis.calculateNewScale(0, -2, +2));
+        assertEquals(-2, axis.calculateNewScale(-20, -5, 5));
+        assertEquals(1, axis.calculateNewScale(4, -2, +2));
+        assertEquals(1, axis.calculateNewScale(1, +2, +2));
+        assertEquals(Double.NaN, axis.calculateNewScale(Double.NaN, -2, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, Double.NaN, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, -2, Double.NaN));
+        assertEquals(-1, axis.calculateNewScale(1, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
+
+        axis.setSide(Side.RIGHT);
+        axis.invertAxis(true);
+        assertEquals(-1, axis.calculateNewScale(4, -2, 2));
+        assertEquals(-1, axis.calculateNewScale(0, -2, +2));
+        assertEquals(2, axis.calculateNewScale(-20, -5, 5));
+        assertEquals(-1, axis.calculateNewScale(4, -2, +2));
+        assertEquals(-1, axis.calculateNewScale(1, +2, +2));
+        assertEquals(Double.NaN, axis.calculateNewScale(Double.NaN, -2, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, Double.NaN, 2));
+        assertEquals(Double.NaN, axis.calculateNewScale(1, -2, Double.NaN));
+        assertEquals(-1, axis.calculateNewScale(1, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
     }
 
     @Test
@@ -191,6 +244,8 @@ class AbstractAxisTests {
                 throw new IllegalStateException("majorTickMarks " + tm + " is invisible");
             }
         }));
+        assertArrayEquals(new double[] { -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0 },
+                majorTickMarks.stream().mapToDouble(TickMark::getValue).toArray());
 
         final List<TickMark> minorTickMarks = axis.computeTickMarks(autoRange, false);
         assertNotNull(minorTickMarks);
@@ -200,17 +255,81 @@ class AbstractAxisTests {
                 throw new IllegalStateException("minorTickMarks " + tm + " is invisible");
             }
         }));
+        assertArrayEquals(new double[] { -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0 },
+                majorTickMarks.stream().mapToDouble(TickMark::getValue).toArray());
 
         axis.invertAxis(true);
-        majorTickMarks.clear();
-        majorTickMarks.addAll(axis.computeTickMarks(autoRange, true));
+        axis.computeTickMarks(autoRange, true);
         assertEquals(10, majorTickMarks.size());
         assertDoesNotThrow(() -> majorTickMarks.forEach(tm -> {
             if (!tm.isVisible()) {
                 throw new IllegalStateException("tm " + tm + " is invisible");
             }
         }));
-        axis.getTickMarks().setAll(majorTickMarks);
+        assertArrayEquals(new double[] { -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0 },
+                majorTickMarks.stream().mapToDouble(TickMark::getValue).toArray());
+    }
+
+    @Test
+    public void tickMarkLabelAlignment() {
+        var axis = new EmptyAbstractAxis();
+        var style = axis.getTickLabelStyle();
+
+        // No rotation
+        axis.getTickLabelStyle().setRotate(0);
+        axis.setSide(Side.TOP);
+        assertEquals(TextAlignment.CENTER, style.getTextAlignment());
+        assertEquals(VPos.BOTTOM, style.getTextOrigin());
+
+        axis.setSide(Side.BOTTOM);
+        assertEquals(TextAlignment.CENTER, style.getTextAlignment());
+        assertEquals(VPos.TOP, style.getTextOrigin());
+
+        axis.setSide(Side.LEFT);
+        assertEquals(TextAlignment.RIGHT, style.getTextAlignment());
+        assertEquals(VPos.CENTER, style.getTextOrigin());
+
+        axis.setSide(Side.RIGHT);
+        assertEquals(TextAlignment.LEFT, style.getTextAlignment());
+        assertEquals(VPos.CENTER, style.getTextOrigin());
+
+        // 90 deg
+        axis.getTickLabelStyle().setRotate(90);
+        axis.setSide(Side.TOP);
+        assertEquals(TextAlignment.LEFT, style.getTextAlignment());
+        assertEquals(VPos.CENTER, style.getTextOrigin());
+
+        axis.setSide(Side.BOTTOM);
+        assertEquals(TextAlignment.LEFT, style.getTextAlignment());
+        assertEquals(VPos.CENTER, style.getTextOrigin());
+
+        axis.setSide(Side.LEFT);
+        assertEquals(TextAlignment.CENTER, style.getTextAlignment());
+        assertEquals(VPos.BOTTOM, style.getTextOrigin());
+
+        axis.setSide(Side.RIGHT);
+        assertEquals(TextAlignment.CENTER, style.getTextAlignment());
+        assertEquals(VPos.TOP, style.getTextOrigin());
+
+        // special non 'n x 90 degree' rotation cases for top/bottom
+        axis.getTickLabelStyle().setRotate(45);
+
+        axis.setSide(Side.TOP);
+        assertEquals(TextAlignment.LEFT, style.getTextAlignment());
+        assertEquals(VPos.BOTTOM, style.getTextOrigin());
+
+        axis.setSide(Side.BOTTOM);
+        assertEquals(TextAlignment.LEFT, style.getTextAlignment());
+        assertEquals(VPos.TOP, style.getTextOrigin());
+
+        // should be equal to 90 degree case
+        axis.setSide(Side.LEFT);
+        assertEquals(TextAlignment.RIGHT, style.getTextAlignment());
+        assertEquals(VPos.CENTER, style.getTextOrigin());
+
+        axis.setSide(Side.RIGHT);
+        assertEquals(TextAlignment.LEFT, style.getTextAlignment());
+        assertEquals(VPos.CENTER, style.getTextOrigin());
     }
 
     @Start
@@ -237,7 +356,7 @@ class AbstractAxisTests {
 
         @Override
         public double computePreferredTickUnit(final double axisLength) {
-            //return axisLength / Math.abs(getMax() - getMin()) / 10.0
+            // return axisLength / Math.abs(getMax() - getMin()) / 10.0
             return 0.1; // simplification for testing
         }
 
@@ -267,25 +386,22 @@ class AbstractAxisTests {
         }
 
         @Override
-        protected List<Double> calculateMajorTickValues(final double length, final AxisRange axisRange) {
-            final List<Double> majorTicks = new ArrayList<>();
+        protected void calculateMajorTickValues(final AxisRange axisRange, DoubleArrayList majorTicks) {
             final double range = Math.abs(axisRange.getMax() - axisRange.getMin());
             final double min = Math.min(getMin(), getMax());
             for (int i = 0; i < 10; i++) {
                 majorTicks.add(min + i * range / 10.0);
             }
-            return majorTicks;
+            return;
         }
 
         @Override
-        protected List<Double> calculateMinorTickValues() {
-            final List<Double> minorTicks = new ArrayList<>();
+        protected void calculateMinorTickValues(DoubleArrayList minorTicks) {
             final double range = Math.abs(getMax() - getMin());
             final double min = Math.min(getMin(), getMax());
             for (int i = 0; i < 100; i++) {
                 minorTicks.add(min + i * range / 100.0);
             }
-            return minorTicks;
         }
 
         @Override

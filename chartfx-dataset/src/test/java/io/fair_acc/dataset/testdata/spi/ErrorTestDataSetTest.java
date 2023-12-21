@@ -4,11 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
 import io.fair_acc.dataset.AxisDescription;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetError;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 class ErrorTestDataSetTest {
     @Test
@@ -35,8 +36,7 @@ class ErrorTestDataSetTest {
         Assertions.assertEquals(10, dsUnderTest.getIndex(DataSet.DIM_X, 22.0));
         Assertions.assertEquals(5, dsUnderTest.getIndex(DataSet.DIM_X, 6.5));
         assertNotNull(dsUnderTest.lock());
-        assertNotNull(dsUnderTest.autoNotification());
-        assertNotNull(dsUnderTest.updateEventListener());
+        assertNotNull(dsUnderTest.getBitState());
         assertNull(dsUnderTest.getDataLabel(5));
         assertNull(dsUnderTest.getStyle(5));
         assertNull(dsUnderTest.getStyle());
@@ -46,8 +46,6 @@ class ErrorTestDataSetTest {
         assertThrows(UnsupportedOperationException.class, () -> dsUnderTest.getIndex(DataSet.DIM_Z, 5.4));
         assertThrows(IndexOutOfBoundsException.class, () -> dsUnderTest.getErrorPositive(DataSet.DIM_Z, 5));
         assertDoesNotThrow(() -> dsUnderTest.recomputeLimits(DataSet.DIM_X));
-        assertTrue(dsUnderTest.isVisible());
-        assertThrows(UnsupportedOperationException.class, () -> dsUnderTest.setVisible(false));
         // getIndex
         // getValue
     }

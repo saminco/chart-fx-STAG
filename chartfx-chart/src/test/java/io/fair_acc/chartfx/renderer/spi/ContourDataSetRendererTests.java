@@ -3,10 +3,6 @@ package io.fair_acc.chartfx.renderer.spi;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.fair_acc.chartfx.renderer.spi.utils.ColorGradient;
-import io.fair_acc.chartfx.ui.utils.FuzzyTestImageUtils;
-import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
-import io.fair_acc.chartfx.ui.utils.TestFx;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
@@ -23,6 +19,10 @@ import org.testfx.framework.junit5.Start;
 import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.spi.DefaultNumericAxis;
 import io.fair_acc.chartfx.renderer.ContourType;
+import io.fair_acc.chartfx.renderer.spi.utils.ColorGradient;
+import io.fair_acc.chartfx.ui.utils.FuzzyTestImageUtils;
+import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
+import io.fair_acc.chartfx.ui.utils.TestFx;
 import io.fair_acc.chartfx.utils.FXUtils;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.GridDataSet;
@@ -66,7 +66,7 @@ public class ContourDataSetRendererTests {
         renderer.getDatasets().add(getTestDataSet());
         chart = new XYChart(new DefaultNumericAxis(), new DefaultNumericAxis());
         chart.getRenderers().set(0, renderer);
-        chart.legendVisibleProperty().set(true);
+        chart.getLegend().getNode().visibleProperty().set(true);
 
         stage.setScene(new Scene(chart, WIDTH, HEIGHT));
         stage.show();
@@ -89,7 +89,7 @@ public class ContourDataSetRendererTests {
         renderer.setContourType(contourType);
         final String contourTypeString = renderer.getContourType().toString();
         final String referenceImage = referenceFileName + contourTypeString + (altImplementation ? "_ALT" : "") + referenceFileExtension;
-        FXUtils.runAndWait(() -> chart.requestLayout());
+        FXUtils.runAndWait(() -> chart.invalidate());
         assertTrue(FXUtils.waitForFxTicks(chart.getScene(), WAIT_N_FX_PULSES, MAX_TIMEOUT_MILLIS));
 
         FXUtils.runAndWait(() -> testImage = chart.snapshot(null, null));
@@ -106,7 +106,7 @@ public class ContourDataSetRendererTests {
             }
         }
 
-        FXUtils.runAndWait(() -> chart.requestLayout());
+        FXUtils.runAndWait(() -> chart.invalidate());
         assertTrue(FXUtils.waitForFxTicks(chart.getScene(), WAIT_N_FX_PULSES, MAX_TIMEOUT_MILLIS));
 
         FXUtils.runAndWait(() -> testImage = chart.snapshot(null, null));
@@ -126,7 +126,11 @@ public class ContourDataSetRendererTests {
 
     @TestFx
     public void test() {
-        final ContourDataSetCache cache = new ContourDataSetCache(new XYChart(), new ContourDataSetRenderer(), getTestDataSet());
+        var chart = new XYChart();
+        var renderer = new ContourDataSetRenderer();
+        chart.getRenderers().add(renderer);
+        renderer.updateAxes();
+        final ContourDataSetCache cache = new ContourDataSetCache(chart, renderer, getTestDataSet());
         Assertions.assertDoesNotThrow(() -> cache.convertDataArrayToImage(TEST_DATA_Z, TEST_DATA_X.length, TEST_DATA_Y.length, ColorGradient.DEFAULT), "data to colour image conversion");
     }
 

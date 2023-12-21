@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import javafx.scene.Scene;
 import javafx.scene.control.TreeItem;
@@ -75,9 +74,8 @@ public class ProfilerInfoBoxTests {
     public void testSetterGetter() {
         assertDoesNotThrow((ThrowingSupplier<ProfilerInfoBox>) ProfilerInfoBox::new);
         assertDoesNotThrow(() -> new ProfilerInfoBox(1000));
-        assertDoesNotThrow(() -> new ProfilerInfoBox(new Scene(new Pane(), 100, 100)));
+        assertDoesNotThrow(() -> new ProfilerInfoBox());
 
-        //        final Scene scene = new Scene(new Pane(), 100,100);
         final ProfilerInfoBox infoBox = new ProfilerInfoBox(); // force fastest update
 
         for (final DebugLevel debugLevel : DebugLevel.values()) {
@@ -109,8 +107,8 @@ public class ProfilerInfoBoxTests {
 
     @TestFx
     public void testSimplePerformanceTrackerBitsAndBobs() {
-        assertThrows(IllegalArgumentException.class, () -> new SimplePerformanceMeter(null, 20));
-        final SimplePerformanceMeter meter = new SimplePerformanceMeter(scene, 20);
+        final SimplePerformanceMeter meter = new SimplePerformanceMeter(20);
+        pane.getChildren().add(meter);
 
         assertDoesNotThrow(SimplePerformanceMeter::getProcessCpuLoadInternal);
         assertDoesNotThrow(meter::isSceneDirty);
@@ -130,8 +128,5 @@ public class ProfilerInfoBoxTests {
         assertNotNull(meter.averageFxFrameRateProperty());
         assertNotNull(meter.averageProcessCpuLoadProperty());
         assertNotNull(meter.averageSystemCpuLoadProperty());
-
-        assertDoesNotThrow(meter::deregisterListener);
-        assertDoesNotThrow(meter::deregisterListener);
     }
 }

@@ -7,8 +7,7 @@ import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSet2D;
 import io.fair_acc.dataset.DataSetMetaData;
 import io.fair_acc.dataset.Histogram1D;
-import io.fair_acc.dataset.event.AddedDataEvent;
-import io.fair_acc.dataset.event.UpdatedDataEvent;
+import io.fair_acc.dataset.events.ChartBits;
 import io.fair_acc.dataset.utils.AssertUtils;
 
 /**
@@ -89,7 +88,7 @@ public class Histogram extends AbstractHistogram implements Histogram1D, DataSet
                 getAxisDescription(getDimension() - 1).add(data[bin]);
             }
         });
-        fireInvalidated(new UpdatedDataEvent(this, "addBinContent()"));
+        fireInvalidated(ChartBits.DataSetData);
     }
 
     @Override
@@ -99,7 +98,7 @@ public class Histogram extends AbstractHistogram implements Histogram1D, DataSet
             addBinContent(bin, w);
             return bin;
         });
-        fireInvalidated(new AddedDataEvent(this, "fill(double x, double w)"));
+        fireInvalidated(ChartBits.DataSetDataAdded);
         return retVal;
     }
 
@@ -110,7 +109,7 @@ public class Histogram extends AbstractHistogram implements Histogram1D, DataSet
                 this.fill(x[i], w[i]);
             }
         });
-        fireInvalidated(new AddedDataEvent(this, "fillN"));
+        fireInvalidated(ChartBits.DataSetDataAdded);
     }
 
     @Override

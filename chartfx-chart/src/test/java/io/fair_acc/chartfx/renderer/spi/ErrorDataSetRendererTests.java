@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 
-import io.fair_acc.chartfx.ui.utils.FuzzyTestImageUtils;
-import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
@@ -25,6 +23,9 @@ import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.spi.DefaultNumericAxis;
 import io.fair_acc.chartfx.renderer.ErrorStyle;
 import io.fair_acc.chartfx.renderer.LineStyle;
+import io.fair_acc.chartfx.ui.utils.FuzzyTestImageUtils;
+import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils;
+import io.fair_acc.chartfx.ui.utils.TestFx;
 import io.fair_acc.chartfx.utils.FXUtils;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.spi.DoubleErrorDataSet;
@@ -64,7 +65,7 @@ public class ErrorDataSetRendererTests {
         renderer.getDatasets().setAll(getTestDataSet());
         chart = new XYChart(xAxis, yAxis);
         chart.getRenderers().set(0, renderer);
-        chart.legendVisibleProperty().set(true);
+        chart.getLegend().getNode().visibleProperty().set(true);
 
         stage.setScene(new Scene(chart, WIDTH, HEIGHT));
         stage.show();
@@ -74,13 +75,20 @@ public class ErrorDataSetRendererTests {
     @EnumSource(LineStyle.class)
     public void testRendererNominal(final LineStyle lineStyle) throws Exception {
         for (ErrorStyle eStyle : ErrorStyle.values()) {
-            renderer.setErrorType(eStyle);
-            testRenderer(lineStyle);
+            FXUtils.runAndWait(() -> {
+                renderer.setErrorStyle(eStyle);
+                try {
+                    testRenderer(lineStyle);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
         }
     }
 
     @Test
-    public void testRendererSepcialCases() throws Exception {
+    @TestFx
+    public void testRendererSpecialCases() throws Exception {
         final LineStyle lineStyle = LineStyle.NORMAL;
 
         renderer.setPointReduction(false);
@@ -122,8 +130,8 @@ public class ErrorDataSetRendererTests {
         renderer.setPolyLineStyle(lineStyle);
         final String referenceImage = getReferenceImageFileName();
         FXUtils.runAndWait(() -> renderer.getDatasets().setAll(getTestDataSet()));
-        FXUtils.runAndWait(() -> chart.getLegend().updateLegend(renderer.getDatasets(), Collections.singletonList(renderer), true));
-        FXUtils.runAndWait(() -> chart.requestLayout());
+        FXUtils.runAndWait(() -> chart.getLegend().updateLegend(Collections.singletonList(renderer), true));
+        FXUtils.runAndWait(() -> chart.invalidate());
         assertTrue(FXUtils.waitForFxTicks(chart.getScene(), WAIT_N_FX_PULSES, MAX_TIMEOUT_MILLIS));
 
         FXUtils.runAndWait(() -> testImage = chart.snapshot(null, null));
@@ -140,7 +148,7 @@ public class ErrorDataSetRendererTests {
             }
         }
 
-        FXUtils.runAndWait(() -> chart.requestLayout());
+        FXUtils.runAndWait(() -> chart.invalidate());
         assertTrue(FXUtils.waitForFxTicks(chart.getScene(), WAIT_N_FX_PULSES, MAX_TIMEOUT_MILLIS));
 
         FXUtils.runAndWait(() -> testImage = chart.snapshot(null, null));

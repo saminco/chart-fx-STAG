@@ -7,14 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.event.AddedDataEvent;
-import io.fair_acc.dataset.event.EventRateLimiter.UpdateStrategy;
-import io.fair_acc.dataset.event.RemovedDataEvent;
-import io.fair_acc.dataset.event.UpdateEvent;
-import io.fair_acc.dataset.event.UpdatedDataEvent;
+import io.fair_acc.dataset.events.BitState;
+import io.fair_acc.dataset.events.ChartBits;
 import io.fair_acc.dataset.spi.DoubleDataSet;
 import io.fair_acc.dataset.spi.DoubleErrorDataSet;
 import io.fair_acc.math.MathDataSet.DataSetValueFunction;
@@ -40,7 +38,10 @@ public class MathDataSetTests {
         MathDataSet identityDataSet = new MathDataSet("N", null, null, (input, output, length) -> {
             // identity function
             System.arraycopy(input, 0, output, 0, length);
-        }, -1, null, rawDataSetRef);
+        }, -1, rawDataSetRef);
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetData);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
         assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_X), identityDataSet.getValues(DataSet.DIM_X));
         assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), identityDataSet.getValues(DataSet.DIM_Y));
         assertArrayEquals(yErrorNeg, identityDataSet.getErrorsNegative(DataSet.DIM_Y));
@@ -53,29 +54,29 @@ public class MathDataSetTests {
         final DoubleDataSet dsRef1 = generateSineWaveData(nBins);
         final DoubleDataSet dsRef2 = generateSineWaveData(nBins);
 
-        assertThrows(IllegalArgumentException.class, () -> new MathDataSet("I", null, null, null, 20, UpdateStrategy.INSTANTANEOUS_RATE));
+        assertThrows(IllegalArgumentException.class, () -> new MathDataSet("I", null, null, null, 20));
 
-        assertThrows(IllegalArgumentException.class, () -> new MathDataSet("I", null, null, identityValueFunction, 20, UpdateStrategy.INSTANTANEOUS_RATE, dsRef1, dsRef2));
+        assertThrows(IllegalArgumentException.class, () -> new MathDataSet("I", null, null, identityValueFunction, 20, dsRef1, dsRef2));
 
-        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, null, null, 20, UpdateStrategy.INSTANTANEOUS_RATE, dsRef1));
+        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, null, null, 20, dsRef1));
 
-        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, null, null, -1, UpdateStrategy.INSTANTANEOUS_RATE, dsRef1));
+        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, null, null, -1, dsRef1));
 
-        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, null, null, 20, null, dsRef1));
+        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, null, null, 20, dsRef1));
 
         // test specific constructors
 
         // DataSet -> DataSet
         assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, dsRef1));
-        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, 20, null, dsRef1));
+        assertDoesNotThrow(() -> new MathDataSet("I", ds -> ds, 20, dsRef1));
 
         // List<DataSet> -> DataSet
         assertDoesNotThrow(() -> new MathDataSet("I", (inputs, out) -> out.set(inputs.get(0)), dsRef1, dsRef2));
-        assertDoesNotThrow(() -> new MathDataSet("I", (inputs, out) -> out.set(inputs.get(0)), 20, null, dsRef1, dsRef2));
+        assertDoesNotThrow(() -> new MathDataSet("I", (inputs, out) -> out.set(inputs.get(0)), 20, dsRef1, dsRef2));
 
         // modify only yValues in DataSet
         assertDoesNotThrow(() -> new MathDataSet("I", identityValueFunction, dsRef1));
-        assertDoesNotThrow(() -> new MathDataSet("I", identityValueFunction, 20, null, dsRef1));
+        assertDoesNotThrow(() -> new MathDataSet("I", identityValueFunction, 20, dsRef1));
     }
 
     @Test
@@ -85,17 +86,23 @@ public class MathDataSetTests {
         final DoubleDataSet magDataSetRef = generateSineWaveSpectrumData(nBins);
         assertEquals(nBins, rawDataSetRef.getDataCount());
 
-        MathDataSet magDataSet = new MathDataSet("magI", dataSets -> {
+        final MathDataSet magDataSet = new MathDataSet("magI", dataSets -> {
             assertEquals(nBins, dataSets.getDataCount());
             return DataSetMath.magnitudeSpectrumDecibel(dataSets);
         }, rawDataSetRef);
+        magDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetData);
+        Awaitility.await().until(() -> magDataSet.getBitState().isDirty());
         assertArrayEquals(magDataSetRef.getValues(DataSet.DIM_Y), magDataSet.getValues(DataSet.DIM_Y));
 
-        magDataSet = new MathDataSet(null, dataSets -> {
+        final MathDataSet magDataSet2 = new MathDataSet(null, dataSets -> {
             assertEquals(nBins, dataSets.getDataCount());
             return DataSetMath.magnitudeSpectrumDecibel(dataSets);
         }, rawDataSetRef);
-        assertArrayEquals(magDataSetRef.getValues(DataSet.DIM_Y), magDataSet.getValues(DataSet.DIM_Y));
+        magDataSet2.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetData);
+        Awaitility.await().until(() -> magDataSet2.getBitState().isDirty());
+        assertArrayEquals(magDataSetRef.getValues(DataSet.DIM_Y), magDataSet2.getValues(DataSet.DIM_Y));
     }
 
     @Test
@@ -104,7 +111,7 @@ public class MathDataSetTests {
         final DoubleDataSet rawDataSetRef = generateSineWaveData(nBins);
         assertEquals(nBins, rawDataSetRef.getDataCount());
 
-        MathDataSet identityDataSet = new MathDataSet("I", (input, output, length) -> {
+        final MathDataSet identityDataSet = new MathDataSet("I", (input, output, length) -> {
             assertEquals(nBins, input.length);
             assertEquals(nBins, length);
             assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), input, "yValue input equality with source");
@@ -112,9 +119,12 @@ public class MathDataSetTests {
             // identity function
             System.arraycopy(input, 0, output, 0, length);
         }, rawDataSetRef);
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetData);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
         assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), identityDataSet.getValues(DataSet.DIM_Y));
 
-        identityDataSet = new MathDataSet(null, (input, output, length) -> {
+        final MathDataSet identityDataSet2 = new MathDataSet(null, (input, output, length) -> {
             assertEquals(nBins, input.length);
             assertEquals(nBins, length);
             assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), input, "yValue input equality with source");
@@ -122,7 +132,10 @@ public class MathDataSetTests {
             // identity function
             System.arraycopy(input, 0, output, 0, length);
         }, rawDataSetRef);
-        assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), identityDataSet.getValues(DataSet.DIM_Y));
+        identityDataSet2.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetData);
+        Awaitility.await().until(() -> identityDataSet2.getBitState().isDirty());
+        assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), identityDataSet2.getValues(DataSet.DIM_Y));
     }
 
     @Test
@@ -136,67 +149,36 @@ public class MathDataSetTests {
             counter1.incrementAndGet();
             // identity function
             System.arraycopy(input, 0, output, 0, length);
-        }, -1, null, rawDataSetRef);
-        assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), identityDataSet.getValues(DataSet.DIM_Y));
-        identityDataSet.addListener(evt -> counter2.incrementAndGet());
+        }, -1, rawDataSetRef);
+        identityDataSet.getBitState().addInvalidateListener(ChartBits.DataSetData,
+                (src, bits) -> counter2.incrementAndGet());
 
-        // has been initialised once during construction
-        assertEquals(1, counter1.get());
-        assertEquals(0, counter2.get());
-        counter1.set(0);
-
-        // null does not invoke update
-        rawDataSetRef.invokeListener(null, false);
-        assertEquals(0, counter1.get());
-        assertEquals(0, counter2.get());
-
-        // null does not invoke update
-        rawDataSetRef.invokeListener(new UpdateEvent(rawDataSetRef, "wrong event"), false);
-        assertEquals(0, counter1.get());
-        assertEquals(0, counter2.get());
-
-        // null does not invoke update
-        rawDataSetRef.invokeListener(new UpdateEvent(identityDataSet, "wrong reference", false));
-        assertEquals(0, counter1.get());
-        assertEquals(0, counter2.get());
+        // wrong event does not invoke update
+        rawDataSetRef.fireInvalidated(ChartBits.ChartLegend);
 
         // AddedDataEvent does invoke update
-        rawDataSetRef.invokeListener(new AddedDataEvent(rawDataSetRef, "OK reference", false));
-        assertEquals(1, counter1.get());
-        assertEquals(1, counter2.get());
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetDataAdded);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
+        assertArrayEquals(rawDataSetRef.getValues(DataSet.DIM_Y), identityDataSet.getValues(DataSet.DIM_Y));
 
         // RemovedDataEvent does invoke update
-        rawDataSetRef.invokeListener(new RemovedDataEvent(rawDataSetRef, "OK reference", false));
-        assertEquals(2, counter1.get());
-        assertEquals(2, counter2.get());
-        rawDataSetRef.invokeListener(new RemovedDataEvent(identityDataSet, "wrong reference", false));
-        assertEquals(3, counter1.get());
-        assertEquals(3, counter2.get());
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetDataRemoved);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
+
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetDataRemoved);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
 
         // UpdatedDataEvent does invoke update
-        rawDataSetRef.invokeListener(new UpdatedDataEvent(rawDataSetRef, "OK reference", false));
-        assertEquals(4, counter1.get());
-        assertEquals(4, counter2.get());
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetData);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
 
-        assertEquals(1, rawDataSetRef.updateEventListener().size());
-        identityDataSet.deregisterListener();
-        assertEquals(0, rawDataSetRef.updateEventListener().size());
-        rawDataSetRef.invokeListener(new UpdatedDataEvent(rawDataSetRef, "OK reference", false));
-        assertEquals(4, counter1.get());
-        assertEquals(4, counter2.get());
-
-        identityDataSet.registerListener();
-        rawDataSetRef.invokeListener(new UpdatedDataEvent(rawDataSetRef, "OK reference", false));
-        assertEquals(5, counter1.get());
-        assertEquals(5, counter2.get());
-
-        assertEquals(1, identityDataSet.getSourceDataSets().size());
-        identityDataSet.getSourceDataSets().clear();
-        assertEquals(0, identityDataSet.getSourceDataSets().size());
-
-        rawDataSetRef.invokeListener(new UpdatedDataEvent(rawDataSetRef, "OK reference", false));
-        assertEquals(5, counter1.get());
-        assertEquals(6, counter2.get());
+        identityDataSet.getBitState().clear();
+        rawDataSetRef.fireInvalidated(ChartBits.DataSetDataAdded);
+        Awaitility.await().until(() -> identityDataSet.getBitState().isDirty());
     }
 
     protected static DoubleDataSet generateSineWaveData(final int nData) {

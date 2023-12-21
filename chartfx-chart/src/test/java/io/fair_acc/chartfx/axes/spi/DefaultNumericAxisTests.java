@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fair_acc.chartfx.axes.LogAxisType;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * @author rstein
@@ -73,12 +74,13 @@ public class DefaultNumericAxisTests {
 
         assertFalse(axis.isLogAxis());
         assertEquals(LogAxisType.LINEAR_SCALE, axis.getLogAxisType());
+        DoubleArrayList tickValues = new DoubleArrayList();
         axis.setLogAxis(true);
-        axis.calculateMinorTickValues();
+        axis.calculateMinorTickValues(tickValues);
         assertTrue(axis.isLogAxis());
         assertEquals(LogAxisType.LOG10_SCALE, axis.getLogAxisType());
         axis.setMin(0.1);
-        axis.updateCachedVariables();
+        axis.updateCachedTransforms();
         axis.layoutChildren();
         assertEquals(axis.getZeroPosition(), axis.getDisplayPosition(axis.getMin()));
         assertEquals(10, axis.getLogarithmBase());
@@ -87,7 +89,8 @@ public class DefaultNumericAxisTests {
 
         axis.setLogAxis(false);
         assertFalse(axis.isLogAxis());
-        axis.updateCachedVariables();
-        axis.calculateMinorTickValues();
+        axis.updateCachedTransforms();
+        tickValues.clear();
+        axis.calculateMinorTickValues(tickValues);
     }
 }

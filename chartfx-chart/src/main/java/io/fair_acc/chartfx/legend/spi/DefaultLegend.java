@@ -2,32 +2,24 @@ package io.fair_acc.chartfx.legend.spi;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
-import javafx.css.PseudoClass;
+import javafx.css.*;
 import javafx.geometry.Orientation;
-import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
-import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.layout.FlowPane;
 
-import io.fair_acc.chartfx.XYChartCss;
 import io.fair_acc.chartfx.legend.Legend;
 import io.fair_acc.chartfx.renderer.Renderer;
-import io.fair_acc.chartfx.utils.StyleParser;
-import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.event.EventListener;
-import io.fair_acc.dataset.event.UpdateEvent;
-import io.fair_acc.dataset.event.UpdatedMetaDataEvent;
+import io.fair_acc.chartfx.ui.css.CssPropertyFactory;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.StyleUtil;
+import io.fair_acc.chartfx.ui.geometry.Side;
+import io.fair_acc.chartfx.utils.PropUtil;
 
 /**
  * A chart legend that displays a list of items with symbols in a box
@@ -35,64 +27,22 @@ import io.fair_acc.dataset.event.UpdatedMetaDataEvent;
  * @author rstein
  */
 public class DefaultLegend extends FlowPane implements Legend {
-    // TODO: transform static integers to styleable property fields
-    private static final int GAP = 5;
-    private static final int SYMBOL_WIDTH = 20;
-    private static final int SYMBOL_HEIGHT = 20;
     private static final PseudoClass disabledClass = PseudoClass.getPseudoClass("disabled");
 
-    // -------------- PRIVATE FIELDS ------------------------------------------
-
-    private final ListChangeListener<LegendItem> itemsListener = c -> {
-        getChildren().setAll(getItems());
-        if (isVisible()) {
-            requestLayout();
-        }
-    };
-
     // -------------- PUBLIC PROPERTIES ----------------------------------------
-    /**
-     * The legend items should be laid out vertically in columns rather than horizontally in rows
-     */
-    private final BooleanProperty vertical = new SimpleBooleanProperty(this, "vertical", false) {
-        @Override
-        protected void invalidated() {
-            setOrientation(get() ? Orientation.VERTICAL : Orientation.HORIZONTAL);
-        }
-    };
+
+    StyleableObjectProperty<Side> side = CSS.createSideProperty(this, Side.BOTTOM);
 
     /**
      * The legend items to display in this legend
      */
-    private final ObjectProperty<ObservableList<LegendItem>> items = new SimpleObjectProperty<>(
-            this, "items") {
-        private ObservableList<LegendItem> oldItems = null;
-
-        @Override
-        protected void invalidated() {
-            if (oldItems != null) {
-                oldItems.removeListener(itemsListener);
-            }
-
-            final ObservableList<LegendItem> newItems = get();
-            if (newItems == null) {
-                getChildren().clear();
-            } else {
-                newItems.addListener(itemsListener);
-                getChildren().setAll(newItems);
-            }
-            oldItems = get();
-            if (isVisible()) {
-                requestLayout();
-            }
-        }
-    };
+    private final ObservableList<LegendItem> items = FXCollections.observableArrayList();
+    private final ArrayList<LegendItem> tmpItems = new ArrayList<>();
 
     public DefaultLegend() {
-        super(GAP, GAP);
-        setItems(FXCollections.observableArrayList());
-        getStyleClass().setAll("chart-legend");
-        setAlignment(Pos.CENTER);
+        StyleUtil.addStyles(this, "chart-legend");
+        items.addListener((ListChangeListener<LegendItem>) c -> getChildren().setAll(items));
+        PropUtil.runOnChange(this::applyCss, sideProperty());
     }
 
     @Override
@@ -108,33 +58,22 @@ public class DefaultLegend extends FlowPane implements Legend {
     }
 
     public final ObservableList<LegendItem> getItems() {
-        return items.get();
+        return items;
     }
 
-    public LegendItem getNewLegendItem(final Renderer renderer, final DataSet series, final int seriesIndex) {
-        final Canvas symbol = renderer.drawLegendSymbol(series, seriesIndex, SYMBOL_WIDTH, SYMBOL_HEIGHT);
-        var item = new LegendItem(series.getName(), symbol);
+    public final void setItems(List<LegendItem> items) {
+        // TODO: remove after changing unit tests
+        this.items.setAll(items);
+    }
+
+    public LegendItem getNewLegendItem(final DataSetNode series) {
+        var item = new LegendItem(series);
         item.setOnMouseClicked(event -> series.setVisible(!series.isVisible()));
-        item.pseudoClassStateChanged(disabledClass, !series.isVisible());
-        series.addListener(new DatasetVisibilityListener(item, series));
+        PropUtil.initAndRunOnChange(
+                () -> item.pseudoClassStateChanged(disabledClass, !series.isVisible()), series.visibleProperty());
+        item.visibleProperty().bind(series.getRenderer().showInLegendProperty().and(series.showInLegendProperty()));
+        item.managedProperty().bind(item.visibleProperty());
         return item;
-    }
-
-    public static class DatasetVisibilityListener implements EventListener {
-        private LegendItem item;
-        private DataSet series;
-
-        public DatasetVisibilityListener(final LegendItem item, final DataSet series) {
-            this.item = item;
-            this.series = series;
-        }
-
-        @Override
-        public void handle(final UpdateEvent evt) {
-            if (evt instanceof UpdatedMetaDataEvent) {
-                item.pseudoClassStateChanged(disabledClass, !series.isVisible());
-            }
-        }
     }
 
     @Override
@@ -149,15 +88,7 @@ public class DefaultLegend extends FlowPane implements Legend {
      */
     @Override
     public final boolean isVertical() {
-        return verticalProperty().get();
-    }
-
-    public final ObjectProperty<ObservableList<LegendItem>> itemsProperty() {
-        return items;
-    }
-
-    public final void setItems(final ObservableList<LegendItem> value) {
-        itemsProperty().set(value);
+        return getOrientation() == Orientation.VERTICAL;
     }
 
     /*
@@ -166,8 +97,8 @@ public class DefaultLegend extends FlowPane implements Legend {
      * @see io.fair_acc.chartfx.legend.Legend#setVertical(boolean)
      */
     @Override
-    public final void setVertical(final boolean value) {
-        verticalProperty().set(value);
+    public final void setVertical(final boolean vertical) {
+        setOrientation(vertical ? Orientation.VERTICAL : Orientation.HORIZONTAL);
     }
 
     /*
@@ -176,97 +107,101 @@ public class DefaultLegend extends FlowPane implements Legend {
      * @see io.fair_acc.chartfx.legend.Legend#updateLegend(java.util.List, java.util.List)
      */
     @Override
-    public void updateLegend(final List<DataSet> dataSets, final List<Renderer> renderers, final boolean forceUpdate) {
-        // list of already drawn data sets in the legend
-        final List<DataSet> alreadyDrawnDataSets = new ArrayList<>();
-        final List<LegendItem> legendItems = new ArrayList<>();
-
+    public void updateLegend(final List<Renderer> renderers, final boolean forceUpdate) {
         if (forceUpdate) {
-            this.getItems().clear();
+            getItems().clear();
         }
 
-        // process legend items common to all renderer
-        int legendItemCount = 0;
-        for (int seriesIndex = 0; seriesIndex < dataSets.size(); seriesIndex++) {
-            final DataSet series = dataSets.get(seriesIndex);
-            final String style = series.getStyle();
-            final Boolean show = StyleParser.getBooleanPropertyValue(style, XYChartCss.DATASET_SHOW_IN_LEGEND);
-            if (show != null && !show) {
-                continue;
-            }
-
-            if (!alreadyDrawnDataSets.contains(series) && !renderers.isEmpty()) {
-                if (renderers.get(0).showInLegend()) {
-                    legendItems.add(getNewLegendItem(renderers.get(0), series, seriesIndex));
-                    alreadyDrawnDataSets.add(series);
-                }
-                legendItemCount++;
-            }
-        }
-
-        // process data sets within the given renderer
-        for (final Renderer renderer : renderers) {
-            if (!renderer.showInLegend()) {
-                legendItemCount += renderer.getDatasets().size();
-                continue;
-            }
-            for (final DataSet series : renderer.getDatasets()) {
-                final String style = series.getStyle();
-                final Boolean show = StyleParser.getBooleanPropertyValue(style, XYChartCss.DATASET_SHOW_IN_LEGEND);
-                if (show != null && !show) {
-                    continue;
+        tmpItems.clear();
+        for (Renderer renderer : renderers) {
+            for (DataSetNode series : renderer.getDatasetNodes()) {
+                // Prefer existing nodes
+                LegendItem item = null;
+                for (LegendItem existing : getItems()) {
+                    if (existing.getSeries() == series) {
+                        item = existing;
+                        break;
+                    }
                 }
 
-                if (!alreadyDrawnDataSets.contains(series)) {
-                    legendItems.add(getNewLegendItem(renderer, series, legendItemCount));
-                    alreadyDrawnDataSets.add(series);
-                    legendItemCount++;
+                // New instance
+                if (item == null) {
+                    item = getNewLegendItem(series);
                 }
+                tmpItems.add(item);
             }
         }
 
-        boolean diffLegend = false;
-        if (getItems().size() != legendItems.size()) {
-            diffLegend = true;
-        } else {
-            final List<String> newItems = legendItems.stream().map(LegendItem::getText).collect(Collectors.toList());
-            final List<String> oldItems = getItems().stream().map(LegendItem::getText).collect(Collectors.toList());
+        // Update all at once
+        getItems().setAll(tmpItems);
+    }
 
-            for (final String item : newItems) {
-                if (!oldItems.contains(item)) {
-                    diffLegend = true;
-                    break;
-                }
+    @Override
+    public void drawLegend() {
+        for (LegendItem item : items) {
+            if (item.isVisible()) {
+                item.drawLegendSymbol();
             }
-        }
-
-        if (diffLegend) {
-            getItems().setAll(legendItems);
         }
     }
 
-    public final BooleanProperty verticalProperty() {
-        return vertical;
+    public Side getSide() {
+        return side.get();
     }
+
+    public StyleableObjectProperty<Side> sideProperty() {
+        return side;
+    }
+
+    public void setSide(Side side) {
+        this.side.set(side);
+    }
+
+    @Override
+    public List<CssMetaData<? extends Styleable, ?>> getCssMetaData() {
+        return getClassCssMetaData();
+    }
+
+    public static List<CssMetaData<? extends Styleable, ?>> getClassCssMetaData() {
+        return CSS.getCssMetaData();
+    }
+
+    private static final CssPropertyFactory<DefaultLegend> CSS = new CssPropertyFactory<>(FlowPane.getClassCssMetaData());
 
     /**
      * A item to be displayed on a Legend
      */
     public static class LegendItem extends Label {
-        public LegendItem(final String text, final Node symbol) {
-            setText(text);
-            getStyleClass().add("chart-legend-item");
-            setAlignment(Pos.CENTER_LEFT);
-            setContentDisplay(ContentDisplay.LEFT);
-            setSymbol(symbol);
+        public LegendItem(DataSetNode series) {
+            StyleUtil.addStyles(this, "chart-legend-item");
+            textProperty().bind(series.nameProperty());
+            setGraphic(symbol);
+            symbol.managedProperty().bind(symbol.visibleProperty());
+            symbol.widthProperty().bind(symbolWidth);
+            symbol.heightProperty().bind(symbolHeight);
+            this.series = series;
         }
 
-        public final Node getSymbol() {
-            return getGraphic();
+        final Canvas symbol = new Canvas();
+        final StyleableDoubleProperty symbolWidth = CSS.createDoubleProperty(this, "symbolWidth", 20);
+        final StyleableDoubleProperty symbolHeight = CSS.createDoubleProperty(this, "symbolHeight", 20);
+        final DataSetNode series;
+
+        public DataSetNode getSeries() {
+            return series;
         }
 
-        public final void setSymbol(final Node value) {
-            this.setGraphic(value);
+        public void drawLegendSymbol() {
+            if (symbol.isVisible()) {
+                symbol.getGraphicsContext2D().clearRect(0, 0, symbol.getWidth(), symbol.getWidth());
+            }
+            symbol.setVisible(series.getRenderer().drawLegendSymbol(series, symbol));
         }
+
+        @Override
+        public List<CssMetaData<? extends Styleable, ?>> getControlCssMetaData() {
+            return CSS.getCssMetaData();
+        }
+        private static final CssPropertyFactory<LegendItem> CSS = new CssPropertyFactory<>(Label.getClassCssMetaData());
     }
 }

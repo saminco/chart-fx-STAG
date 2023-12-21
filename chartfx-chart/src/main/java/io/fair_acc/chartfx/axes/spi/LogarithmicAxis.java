@@ -18,6 +18,7 @@ import io.fair_acc.chartfx.axes.LogAxisType;
 import io.fair_acc.chartfx.axes.TickUnitSupplier;
 import io.fair_acc.chartfx.axes.spi.format.DefaultTickUnitSupplier;
 import io.fair_acc.chartfx.ui.css.CssPropertyFactory;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * @author rstein
@@ -29,8 +30,8 @@ public class LogarithmicAxis extends AbstractAxis {
     public static final double DB20_LOGARITHM_BASE = Math.exp(Math.log10(10) / 20.0);
     public static final double DB10_LOGARITHM_BASE = Math.exp(Math.log10(10) / 10.0);
     public static final int DEFAULT_SMALL_LOG_AXIS = 4; // [orders of
-            // magnitude], e.g. '4'
-            // <-> [1,10000]
+                                                        // magnitude], e.g. '4'
+                                                        // <-> [1,10000]
     private static final int DEFAULT_TICK_COUNT = 9;
     private static final TickUnitSupplier DEFAULT_TICK_UNIT_SUPPLIER = new DefaultTickUnitSupplier();
 
@@ -330,32 +331,30 @@ public class LogarithmicAxis extends AbstractAxis {
     }
 
     @Override
-    protected List<Double> calculateMajorTickValues(final double axisLength, final AxisRange range) {
+    protected void calculateMajorTickValues(final AxisRange range, DoubleArrayList tickValues) {
         if (range == null) {
             throw new InvalidParameterException("range is null");
         }
 
-        final List<Double> tickValues = new ArrayList<>();
         if (range.getLowerBound() >= range.getUpperBound()) {
-            return Collections.singletonList(range.getLowerBound());
+            tickValues.add(range.getLowerBound());
+            return;
         }
         double exp = Math.ceil(log(range.getLowerBound()));
         for (double tickValue = pow(exp); tickValue <= range.getUpperBound(); tickValue = pow(++exp)) {
             tickValues.add(tickValue);
         }
-        return tickValues;
     }
 
     // -------------- STYLESHEET HANDLING
     // ------------------------------------------------------------------------------
 
     @Override
-    protected List<Double> calculateMinorTickValues() {
+    protected void calculateMinorTickValues(DoubleArrayList minorTickMarks) {
         if (getMinorTickCount() <= 0) {
-            return Collections.emptyList();
+            return;
         }
 
-        final List<Double> minorTickMarks = new ArrayList<>();
         final double lowerBound = getMin();
         final double upperBound = getMax();
 
@@ -369,8 +368,6 @@ public class LogarithmicAxis extends AbstractAxis {
                 }
             }
         }
-
-        return minorTickMarks;
     }
 
     @Override

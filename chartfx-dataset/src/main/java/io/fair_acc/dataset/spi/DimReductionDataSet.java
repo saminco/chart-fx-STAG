@@ -1,18 +1,17 @@
 package io.fair_acc.dataset.spi;
 
-import io.fair_acc.dataset.event.AddedDataEvent;
-import io.fair_acc.dataset.event.EventListener;
-import io.fair_acc.dataset.event.UpdateEvent;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetMetaData;
 import io.fair_acc.dataset.GridDataSet;
+import io.fair_acc.dataset.events.ChartBits;
+import io.fair_acc.dataset.events.StateListener;
 
 /**
  * Reduces 3D data to 2D DataSet either via slicing, min, mean, max or integration
  *
  * @author rstein
  */
-public class DimReductionDataSet extends DoubleDataSet implements EventListener {
+public class DimReductionDataSet extends DoubleDataSet implements StateListener {
     /**
      * The possible reduction options if integrated over a value range
      *
@@ -80,8 +79,7 @@ public class DimReductionDataSet extends DoubleDataSet implements EventListener 
         return source;
     }
 
-    @Override
-    public void handle(UpdateEvent event) {
+    public void handle(int event) {
         lock().writeLockGuard(() -> source.lock().readLockGuard(() -> {
             this.getWarningList().clear();
             if (source instanceof DataSetMetaData) {
@@ -92,10 +90,8 @@ public class DimReductionDataSet extends DoubleDataSet implements EventListener 
                 return;
             }
             // recompute min/max indices based on actual new value range
-            final boolean oldValue = source.autoNotification().getAndSet(false);
             minIndex = source.getGridIndex(dimIndex == DIM_X ? DIM_Y : DIM_X, minValue);
             maxIndex = source.getGridIndex(dimIndex == DIM_X ? DIM_Y : DIM_X, maxValue);
-            source.autoNotification().set(oldValue);
 
             switch (reductionOption) {
             case MIN:
@@ -117,17 +113,17 @@ public class DimReductionDataSet extends DoubleDataSet implements EventListener 
             }
         }));
 
-        this.fireInvalidated(new AddedDataEvent(this, "updated " + DimReductionDataSet.class.getSimpleName() + " name = " + this.getName()));
+        this.fireInvalidated(ChartBits.DataSetDataAdded);
     }
 
     public void setMaxValue(final double val) {
         lock().writeLockGuard(() -> maxValue = val);
-        this.handle(new UpdateEvent(this, "changed indexMax"));
+        this.handle(ChartBits.DataSetData.getAsInt());
     }
 
     public void setMinValue(double val) {
         lock().writeLockGuard(() -> minValue = val);
-        this.handle(new UpdateEvent(this, "changed indexMin"));
+        this.handle(ChartBits.DataSetData.getAsInt());
     }
 
     public void setRange(final double min, final double max) {
@@ -135,7 +131,7 @@ public class DimReductionDataSet extends DoubleDataSet implements EventListener 
             minValue = min;
             maxValue = max;
         });
-        this.handle(new UpdateEvent(this, "changed indexMin indexMax"));
+        this.handle(ChartBits.DataSetData.getAsInt());
     }
 
     protected void updateMeanIntegral(final boolean isMean) {

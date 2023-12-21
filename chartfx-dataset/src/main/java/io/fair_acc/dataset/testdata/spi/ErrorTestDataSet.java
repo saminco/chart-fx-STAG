@@ -1,13 +1,13 @@
 package io.fair_acc.dataset.testdata.spi;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.fair_acc.dataset.AxisDescription;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetError;
-import io.fair_acc.dataset.event.EventListener;
+import io.fair_acc.dataset.events.BitState;
 import io.fair_acc.dataset.locks.DataSetLock;
 import io.fair_acc.dataset.locks.DefaultDataSetLock;
 import io.fair_acc.dataset.spi.DefaultAxisDescription;
@@ -23,8 +23,7 @@ public class ErrorTestDataSet implements DataSetError {
     private final int nSamples;
     private final ErrorType errorType;
     private final DataSetLock<ErrorTestDataSet> lock = new DefaultDataSetLock<>(this);
-    private final AtomicBoolean autoNotification = new AtomicBoolean();
-    private final List<EventListener> eventListeners = new ArrayList<>();
+    private final BitState state = BitState.initDirty(this);
 
     private static final double STEP = 0.4; // multiples of this will be the step sizes in x direction
     private static final int N_STEP_SWEEP = 10; // how many times to increase step size before returning to original step size
@@ -81,6 +80,11 @@ public class ErrorTestDataSet implements DataSetError {
     }
 
     @Override
+    public boolean hasDataLabels() {
+        return false;
+    }
+
+    @Override
     public int getDimension() {
         return 2;
     }
@@ -100,6 +104,16 @@ public class ErrorTestDataSet implements DataSetError {
     }
 
     @Override
+    public List<String> getStyleClasses() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public DataSet addStyleClasses(String... cssClass) {
+        return this;
+    }
+
+    @Override
     public String getStyle() {
         return null;
     }
@@ -107,6 +121,11 @@ public class ErrorTestDataSet implements DataSetError {
     @Override
     public String getStyle(final int index) {
         return null;
+    }
+
+    @Override
+    public boolean hasStyles() {
+        return false;
     }
 
     @Override
@@ -163,16 +182,6 @@ public class ErrorTestDataSet implements DataSetError {
     }
 
     @Override
-    public boolean isVisible() {
-        return true;
-    }
-
-    @Override
-    public DataSet setVisible(boolean visible) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public double getErrorNegative(final int dimIndex, final int index) {
         if (getErrorType(dimIndex) == DataSetError.ErrorType.SYMMETRIC) {
             return getErrorPositive(dimIndex, index);
@@ -205,13 +214,8 @@ public class ErrorTestDataSet implements DataSetError {
     }
 
     @Override
-    public AtomicBoolean autoNotification() {
-        return autoNotification;
-    }
-
-    @Override
-    public List<EventListener> updateEventListener() {
-        return eventListeners;
+    public BitState getBitState() {
+        return state;
     }
 
     public enum ErrorType {

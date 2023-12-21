@@ -9,6 +9,7 @@ import static io.fair_acc.chartfx.plugins.measurements.SimpleMeasurements.Measur
 
 import java.util.Optional;
 
+import javafx.collections.ListChangeListener;
 import javafx.scene.control.ButtonType;
 
 import org.slf4j.Logger;
@@ -19,11 +20,13 @@ import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.axes.AxisLabelFormatter;
 import io.fair_acc.chartfx.axes.spi.DefaultNumericAxis;
 import io.fair_acc.chartfx.axes.spi.MetricPrefix;
+import io.fair_acc.chartfx.events.FxEventProcessor;
+import io.fair_acc.chartfx.plugins.AbstractSingleValueIndicator;
 import io.fair_acc.chartfx.plugins.ParameterMeasurements;
 import io.fair_acc.chartfx.utils.DragResizerUtil;
 import io.fair_acc.chartfx.utils.FXUtils;
 import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.event.UpdateEvent;
+import io.fair_acc.dataset.events.BitState;
 import io.fair_acc.math.SimpleDataSetEstimators;
 
 /**
@@ -51,8 +54,7 @@ public class SimpleMeasurements extends AbstractChartMeasurement {
         return measType;
     }
 
-    @Override
-    public void handle(final UpdateEvent event) {
+    public void handle() {
         final DataSet ds = getDataSet();
         if (getValueIndicatorsUser().size() < measType.getRequiredSelectors() || ds == null) {
             // not yet initialised
@@ -212,11 +214,6 @@ public class SimpleMeasurements extends AbstractChartMeasurement {
                 break;
             }
         });
-
-        if (event != null) {
-            // republish updateEvent
-            invokeListener(event);
-        }
     }
 
     @Override
@@ -231,8 +228,18 @@ public class SimpleMeasurements extends AbstractChartMeasurement {
             LOGGER.atTrace().addArgument(getValueIndicatorsUser()).log("detected getValueIndicatorsUser() = {}");
         }
 
+        var dataSet = getDataSet();
+        var measurementBitState = BitState.initDirty(dataSet, BitState.ALL_BITS);
+        dataSet.getBitState().addInvalidateListener(measurementBitState);
+        getValueIndicators().forEach(indicator -> indicator.valueProperty().addListener(measurementBitState.onPropChange(BitState.ALL_BITS)::set));
+        getValueIndicators().addListener((ListChangeListener.Change<? extends AbstractSingleValueIndicator> change) -> {
+            while (change.next()) {
+                change.getAddedSubList().forEach(c -> c.valueProperty().addListener(measurementBitState.onPropChange(BitState.ALL_BITS)::set));
+                // change.getRemoved().forEach(c -> c.getBitState().removeInvalidateListener(measurementBitState));
+            }
+        });
+        FxEventProcessor.getInstance().addAction(measurementBitState, this::handle);
         // initial update
-        handle(null);
         if (LOGGER.isTraceEnabled()) {
             LOGGER.atTrace().log("initialised and called initial handle(null)");
         }
@@ -241,7 +248,7 @@ public class SimpleMeasurements extends AbstractChartMeasurement {
     @Override
     protected void removeAction() {
         super.removeAction();
-        getMeasurementPlugin().getChart().requestLayout();
+        getMeasurementPlugin().getChart().invalidate();
     }
 
     public enum MeasurementCategory {
@@ -274,13 +281,13 @@ public class SimpleMeasurements extends AbstractChartMeasurement {
         MARKER_VER(false, INDICATOR, "Marker Y", 1),
         MARKER_DISTANCE_VER(false, INDICATOR, "Marker ∆Y"),
 
-        /** 
-         * horizontal value at indicator 
+        /**
+         * horizontal value at indicator
          */
         VALUE_HOR(false, INDICATOR, "hor. value", 1),
         DISTANCE_HOR(false, INDICATOR, "hor. distance"),
-        /** 
-         * vertical value at indicator 
+        /**
+         * vertical value at indicator
          */
         VALUE_VER(true, INDICATOR, "ver. value", 1),
         DISTANCE_VER(true, INDICATOR, "ver. distance"),

@@ -9,14 +9,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
 import io.fair_acc.dataset.AxisDescription;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetError;
 import io.fair_acc.dataset.GridDataSet;
-import io.fair_acc.dataset.event.EventListener;
+import io.fair_acc.dataset.events.BitState;
 import io.fair_acc.dataset.locks.DataSetLock;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 /**
  * Checks for the DataSetBuilder
@@ -225,12 +226,7 @@ class DataSetBuilderTests {
      */
     private static class MinimalDataSet implements DataSet {
         private static final long serialVersionUID = 1L;
-        private final AtomicBoolean autoNotify = new AtomicBoolean();
-
-        @Override
-        public AtomicBoolean autoNotification() {
-            return autoNotify;
-        }
+        private BitState state = BitState.initDirty(this);
 
         @Override
         public double get(int dimIndex, int index) {
@@ -254,6 +250,11 @@ class DataSetBuilderTests {
         }
 
         @Override
+        public boolean hasDataLabels() {
+            return false;
+        }
+
+        @Override
         public int getDimension() {
             // TODO Auto-generated method stub
             return 0;
@@ -270,6 +271,16 @@ class DataSetBuilderTests {
         }
 
         @Override
+        public List<String> getStyleClasses() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public DataSet addStyleClasses(String... cssClass) {
+            return this;
+        }
+
+        @Override
         public String getStyle() {
             return null;
         }
@@ -277,6 +288,11 @@ class DataSetBuilderTests {
         @Override
         public String getStyle(int index) {
             return null;
+        }
+
+        @Override
+        public boolean hasStyles() {
+            return false;
         }
 
         @Override
@@ -309,23 +325,13 @@ class DataSetBuilderTests {
         }
 
         @Override
-        public List<EventListener> updateEventListener() {
-            return Collections.emptyList();
+        public BitState getBitState() {
+            return state;
         }
 
         @Override
         public DataSet set(final DataSet other, final boolean copy) {
             throw new UnsupportedOperationException("copy setting transposed data set is not implemented");
-        }
-
-        @Override
-        public boolean isVisible() {
-            return true;
-        }
-
-        @Override
-        public DataSet setVisible(boolean visible) {
-            return null;
         }
     }
 }

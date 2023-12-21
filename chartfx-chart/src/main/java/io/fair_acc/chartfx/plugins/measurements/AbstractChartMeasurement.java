@@ -3,11 +3,9 @@ package io.fair_acc.chartfx.plugins.measurements;
 import static io.fair_acc.chartfx.axes.AxisMode.X;
 
 import java.text.DecimalFormat;
-import java.util.Collections;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import javafx.beans.property.DoubleProperty;
@@ -43,10 +41,7 @@ import org.slf4j.LoggerFactory;
 import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.axes.AxisMode;
-import io.fair_acc.chartfx.plugins.AbstractSingleValueIndicator;
-import io.fair_acc.chartfx.plugins.ParameterMeasurements;
-import io.fair_acc.chartfx.plugins.XValueIndicator;
-import io.fair_acc.chartfx.plugins.YValueIndicator;
+import io.fair_acc.chartfx.plugins.*;
 import io.fair_acc.chartfx.plugins.measurements.utils.CheckedValueField;
 import io.fair_acc.chartfx.plugins.measurements.utils.DataSetSelector;
 import io.fair_acc.chartfx.plugins.measurements.utils.ValueIndicatorSelector;
@@ -55,9 +50,8 @@ import io.fair_acc.chartfx.utils.MouseUtils;
 import io.fair_acc.chartfx.viewer.DataViewWindow;
 import io.fair_acc.chartfx.viewer.DataViewWindow.WindowDecoration;
 import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.event.EventListener;
-import io.fair_acc.dataset.event.EventRateLimiter;
-import io.fair_acc.dataset.event.EventSource;
+import io.fair_acc.dataset.events.BitState;
+import io.fair_acc.dataset.events.EventSource;
 
 import impl.org.controlsfx.skin.DecorationPane;
 
@@ -66,8 +60,9 @@ import impl.org.controlsfx.skin.DecorationPane;
  *
  * @author rstein
  */
-public abstract class AbstractChartMeasurement implements EventListener, EventSource {
+public abstract class AbstractChartMeasurement implements EventSource {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractChartMeasurement.class);
+    private final BitState state = BitState.initDirty(this);
     private static final int MIN_DRAG_BORDER_WIDTH = 30;
     protected static final double DEFAULT_MIN = Double.NEGATIVE_INFINITY;
     protected static final double DEFAULT_MAX = Double.POSITIVE_INFINITY;
@@ -78,8 +73,6 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
     public static final int DEFAULT_SMALL_AXIS = 6; // [orders of magnitude], e.g. '4' <-> [1,10000]
     protected final DecimalFormat formatterSmall = new DecimalFormat(FORMAT_SMALL_SCALE);
     protected final DecimalFormat formatterLarge = new DecimalFormat(FORMAT_LARGE_SCALE);
-    private final AtomicBoolean autoNotify = new AtomicBoolean(true);
-    private final List<EventListener> updateListeners = Collections.synchronizedList(new LinkedList<>());
     private final CheckedValueField valueField = new CheckedValueField();
     private final StringProperty title = new SimpleStringProperty(this, "title", null);
     private final ObjectProperty<DataSet> dataSet = new SimpleObjectProperty<>(this, "dataSet", null);
@@ -93,7 +86,6 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
     protected int lastLayoutRow;
     protected final int requiredNumberOfIndicators;
     protected final int requiredNumberOfDataSets;
-    private final EventListener sliderChanged = new EventRateLimiter(this, DEFAULT_UPDATE_RATE_LIMIT);
     protected final GridPane gridPane = new GridPane();
     private final ParameterMeasurements plugin;
     private final String measurementName;
@@ -130,9 +122,8 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
     };
     private final ListChangeListener<? super AbstractSingleValueIndicator> valueIndicatorsUserChangeListener = (final Change<? extends AbstractSingleValueIndicator> change) -> {
         while (change.next()) {
-            change.getRemoved().forEach(oldIndicator -> oldIndicator.removeListener(sliderChanged));
-
-            change.getAddedSubList().stream().filter(newIndicator -> !newIndicator.updateEventListener().contains(sliderChanged)).forEach(newIndicator -> newIndicator.addListener(sliderChanged));
+            change.getRemoved().forEach(oldIndicator -> oldIndicator.removeListener(this));
+            change.getAddedSubList().forEach(newIndicator -> newIndicator.addListener(this));
         }
     };
 
@@ -182,11 +173,6 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
         dataSetChangeListener.changed(dataSet, null, null);
 
         getMeasurementPlugin().getDataView().getVisibleChildren().add(dataViewWindow);
-    }
-
-    @Override
-    public AtomicBoolean autoNotification() {
-        return autoNotify;
     }
 
     public ObjectProperty<DataSet> dataSetProperty() {
@@ -268,8 +254,8 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
     }
 
     @Override
-    public List<EventListener> updateEventListener() {
-        return updateListeners;
+    public BitState getBitState() {
+        return state;
     }
 
     public DoubleProperty valueProperty() {
@@ -313,6 +299,19 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
     }
 
     protected void removeAction() {
+        // remove unused indicators
+        List<ChartPlugin> toRemove = new ArrayList<>();
+        getValueIndicatorsUser().forEach(ind -> {
+            if (!ind.isAutoRemove()) {
+                return;
+            }
+            boolean used = plugin.getChartMeasurements().stream().anyMatch(measurement -> measurement != this && measurement.getValueIndicatorsUser().contains(ind));
+            if (!used) {
+                toRemove.add(ind);
+            }
+        });
+        plugin.getChart().getPlugins().removeAll(toRemove);
+
         getMeasurementPlugin().getChartMeasurements().remove(this);
         getMeasurementPlugin().getDataView().getChildren().remove(dataViewWindow);
         getMeasurementPlugin().getDataView().getVisibleChildren().remove(dataViewWindow);
@@ -320,7 +319,6 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
         getValueIndicatorsUser().removeListener(valueIndicatorsUserChangeListener);
 
         removeSliderChangeListener();
-        cleanUpSuperfluousIndicators();
     }
 
     protected void removeSliderChangeListener() {
@@ -330,18 +328,9 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
         }
         final List<AbstractSingleValueIndicator> allIndicators = chart.getPlugins().stream().filter(p -> p instanceof AbstractSingleValueIndicator).map(p -> (AbstractSingleValueIndicator) p).collect(Collectors.toList());
         allIndicators.forEach((final AbstractSingleValueIndicator indicator) -> {
-            indicator.removeListener(sliderChanged);
+            indicator.removeListener(this);
             getValueIndicatorsUser().remove(indicator);
         });
-    }
-
-    protected void cleanUpSuperfluousIndicators() {
-        final Chart chart = getMeasurementPlugin().getChart();
-        if (chart == null) {
-            return;
-        }
-        final List<AbstractSingleValueIndicator> allIndicators = chart.getPlugins().stream().filter(p -> p instanceof AbstractSingleValueIndicator).map(p -> (AbstractSingleValueIndicator) p).collect(Collectors.toList());
-        allIndicators.stream().filter((final AbstractSingleValueIndicator indicator) -> indicator.isAutoRemove() && indicator.updateEventListener().isEmpty()).forEach((final AbstractSingleValueIndicator indicator) -> getMeasurementPlugin().getChart().getPlugins().remove(indicator));
     }
 
     protected void updateSlider() {
@@ -352,7 +341,6 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
         for (int i = 0; i < requiredNumberOfIndicators; i++) {
             updateSlider(i);
         }
-        cleanUpSuperfluousIndicators();
     }
 
     protected AbstractSingleValueIndicator updateSlider(final int requestedIndex) {
@@ -378,8 +366,8 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
             getMeasurementPlugin().getChart().getPlugins().add(sliderIndicator);
         }
 
-        if (!sliderIndicator.updateEventListener().contains(sliderChanged)) {
-            sliderIndicator.addListener(sliderChanged);
+        if (!sliderIndicator.getBitState().getChangeListeners().contains(this)) {
+            sliderIndicator.addListener(this);
         }
 
         return sliderIndicator;
@@ -417,5 +405,9 @@ public abstract class AbstractChartMeasurement implements EventListener, EventSo
             }
         }
         return minRowOffset + maxRowIndex + 1;
+    }
+
+    public boolean onWorkerThread() {
+        return false;
     }
 }

@@ -11,7 +11,9 @@ import javafx.collections.ObservableList;
 import javafx.util.StringConverter;
 
 import io.fair_acc.chartfx.axes.AxisLabelOverlapPolicy;
+import io.fair_acc.chartfx.utils.PropUtil;
 import io.fair_acc.dataset.DataSet;
+import io.fair_acc.dataset.spi.fastutil.DoubleArrayList;
 
 /**
  * A axis implementation that will works on string categories where each value as a unique category(tick mark) along the
@@ -64,19 +66,13 @@ public final class CategoryAxis extends DefaultNumericAxis {
     public CategoryAxis(final String axisLabel) {
         super(axisLabel);
         this.setOverlapPolicy(AxisLabelOverlapPolicy.SHIFT_ALT);
-        minProperty().addListener((ch, old, val) -> {
-            final double range = Math.abs(val.doubleValue() - CategoryAxis.this.getMax());
-            final double rangeInt = (int) range;
-            final double scale = 0.5 / rangeInt;
+        PropUtil.runOnChange(() -> {
+            final double range = Math.abs(getMax() - getMin());
+            if (!Double.isFinite(range))
+                return;
+            final double scale = 0.5 / ((int) range);
             autoRangePaddingProperty().set(scale);
-        });
-
-        maxProperty().addListener((ch, old, val) -> {
-            final double range = Math.abs(CategoryAxis.this.getMin() - val.doubleValue());
-            final double rangeInt = (int) range;
-            final double scale = 0.5 / rangeInt;
-            autoRangePaddingProperty().set(scale);
-        });
+        }, minProperty(), maxProperty());
     }
 
     /**
@@ -152,8 +148,6 @@ public final class CategoryAxis extends DefaultNumericAxis {
             }
         });
         categories.set(categoryList);
-
-        requestAxisLayout();
     }
 
     /**
@@ -163,28 +157,25 @@ public final class CategoryAxis extends DefaultNumericAxis {
      * @return true is categories were modified, false otherwise
      */
     public boolean updateCategories(final DataSet dataSet) {
-        if (dataSet == null || forceAxisCategories) {
+        if (dataSet == null || !dataSet.hasDataLabels() || forceAxisCategories) {
             return false;
         }
 
         final List<String> newCategoryList = new ArrayList<>();
-        final boolean result = dataSet.lock().readLockGuard(() -> {
-            boolean zeroDataLabels = true;
-            for (int i = 0; i < dataSet.getDataCount(); i++) {
-                final String dataLabel = dataSet.getDataLabel(i);
-                String sanitizedLabel;
-                if (dataLabel == null) {
-                    sanitizedLabel = "unknown category";
-                } else {
-                    sanitizedLabel = dataLabel;
-                    zeroDataLabels = false;
-                }
-                newCategoryList.add(sanitizedLabel);
+        boolean zeroDataLabels = true;
+        for (int i = 0; i < dataSet.getDataCount(); i++) {
+            final String dataLabel = dataSet.getDataLabel(i);
+            String sanitizedLabel;
+            if (dataLabel == null) {
+                sanitizedLabel = "unknown category";
+            } else {
+                sanitizedLabel = dataLabel;
+                zeroDataLabels = false;
             }
-            return zeroDataLabels;
-        });
+            newCategoryList.add(sanitizedLabel);
+        }
 
-        if (!result) {
+        if (!zeroDataLabels) {
             setCategories(newCategoryList);
             forceAxisCategories = false;
         }
@@ -216,8 +207,8 @@ public final class CategoryAxis extends DefaultNumericAxis {
     }
 
     @Override
-    protected List<Double> calculateMinorTickValues() {
-        return Collections.emptyList();
+    protected void calculateMinorTickValues(DoubleArrayList tickValues) {
+        // categories have no minor ticks
     }
 
     @Override

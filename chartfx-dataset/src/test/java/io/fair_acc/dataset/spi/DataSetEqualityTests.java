@@ -43,12 +43,14 @@ class DataSetEqualityTests {
     void testDoubleDataSetEquality() { // NOPMD NOSONAR number of asserts in method
         final DoubleErrorDataSet ds1 = new DoubleErrorDataSet("default");
         final DoubleErrorDataSet ds2 = new DoubleErrorDataSet("default");
+        ds1.recomputeLimits();
+        ds2.recomputeLimits();
 
         assertEquals(ds1, ds1);
         assertNotEquals(null, ds1);
-        //noinspection AssertBetweenInconvertibleTypes
+        // noinspection AssertBetweenInconvertibleTypes
         assertNotEquals(ds1, new OneDimDataSet(), "incompatible class type"); // NOPMD NOSONAR
-        //noinspection AssertBetweenInconvertibleTypes
+        // noinspection AssertBetweenInconvertibleTypes
         assertNotEquals("", ds1, "incompatible class type"); // NOPMD NOSONAR
         assertEquals(ds1, ds2);
 
@@ -180,9 +182,9 @@ class DataSetEqualityTests {
         assertEquals(ds1, ds2);
 
         // listeners are explicitly not checked
-        ds1.addListener(e -> System.err.print("do nothing"));
+        ds1.addListener((src, bits) -> System.err.print("do nothing"));
         assertEquals(ds1, ds2);
-        ds2.addListener(e -> System.err.print("do also nothing"));
+        ds2.addListener((src, bits) -> System.err.print("do also nothing"));
         assertEquals(ds1, ds2);
     }
 

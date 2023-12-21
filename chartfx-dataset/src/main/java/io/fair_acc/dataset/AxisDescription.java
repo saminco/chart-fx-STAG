@@ -2,10 +2,7 @@ package io.fair_acc.dataset;
 
 import java.io.Serializable;
 
-import io.fair_acc.dataset.event.AxisChangeEvent;
-import io.fair_acc.dataset.event.AxisNameChangeEvent;
-import io.fair_acc.dataset.event.AxisRangeChangeEvent;
-import io.fair_acc.dataset.event.EventSource;
+import io.fair_acc.dataset.events.EventSource;
 
 /**
  * Axis description containing the axis name, its unit as well as its minimum and maximum range.
@@ -16,7 +13,7 @@ import io.fair_acc.dataset.event.EventSource;
  * axis name and unit [..].setName("voltage", "V", 0.0, 230.0); // for setting the axis name, unit and explicit min/max
  * values [..].setName("intensity", "ppp", 1e9, 1e10, 1e8, 1e11); // or [..].setName("intensity", "ppp",
  * intensityRange); // for an unsorted range list based on which the internal min/max range is updated.
- * 
+ *
  * @author akrimm
  * @author rstein
  */
@@ -50,7 +47,7 @@ public interface AxisDescription extends EventSource, Serializable {
 
     /**
      * Empties this DataRange. After calling this method this data range becomes undefined.
-     * 
+     *
      * @return <code>true</code> if the values were valid before
      * @see #isDefined()
      */
@@ -88,7 +85,7 @@ public interface AxisDescription extends EventSource, Serializable {
 
     /**
      * Determines if axis range is defined - ie. if <code>min</code> and <code>max</code> values are defined.
-     * 
+     *
      * @return <code>true</code> if range is well defined
      */
     boolean isDefined();
@@ -105,7 +102,7 @@ public interface AxisDescription extends EventSource, Serializable {
 
     /**
      * Sets <code>min</code> and <code>max</code> values for this range.
-     * 
+     *
      * @param min new minimum of the range
      * @param max new maximum of the range
      * @return <code>true</code> if the values becomes the new <code>min</code> or <code>max</code>.
@@ -115,9 +112,6 @@ public interface AxisDescription extends EventSource, Serializable {
     /**
      * @param axisName the new axis name
      * @param axisUnit the new axis unit (optional variadic argument) N.B. issues
-     * @see AxisNameChangeEvent event if only the name/unit changed, or
-     * @see AxisRangeChangeEvent event if only the range changed, or
-     * @see AxisChangeEvent for a full change
      * @return <code>true</code> if this setter invalidates the existing min/max range
      */
     boolean set(final String axisName, final String... axisUnit);
@@ -127,16 +121,13 @@ public interface AxisDescription extends EventSource, Serializable {
      * @param axisUnit the new axis unit
      * @param rangeMin the user-provided new minimum value of the DataSet/Axis range
      * @param rangeMax the user-provided new maximum value of the DataSet/Axis range
-     * @see AxisNameChangeEvent event if only the name/unit changed, or
-     * @see AxisRangeChangeEvent event if only the range changed, or
-     * @see AxisChangeEvent for a full change
      * @return <code>true</code> if this setter invalidates the existing min/max range
      */
     boolean set(final String axisName, final String axisUnit, final double rangeMin, final double rangeMax);
 
     /**
      * Sets <code>max</code> value for this range.
-     * 
+     *
      * @param max the new max value
      * @return <code>true</code> if the value becomes the new <code>max</code>.
      */
@@ -144,7 +135,7 @@ public interface AxisDescription extends EventSource, Serializable {
 
     /**
      * Sets <code>min</code> value for this range.
-     * 
+     *
      * @param min the new max value
      * @return <code>true</code> if the value becomes the new <code>min</code>.
      */

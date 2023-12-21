@@ -5,21 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
-
-import javafx.collections.ObservableList;
-import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.axes.spi.DefaultNumericAxis;
 import io.fair_acc.chartfx.renderer.ErrorStyle;
 import io.fair_acc.chartfx.renderer.LineStyle;
 import io.fair_acc.chartfx.renderer.datareduction.DefaultDataReducer;
 import io.fair_acc.chartfx.renderer.datareduction.MaxDataReducer;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
 import io.fair_acc.dataset.DataSet;
 
 /**
@@ -57,11 +53,6 @@ public class AbstractErrorDataSetRendererParameterTests {
         renderer.setDrawBubbles(false);
         assertFalse(renderer.isDrawBubbles());
 
-        renderer.setDrawChartDataSets(true);
-        assertTrue(renderer.isDrawChartDataSets());
-        renderer.setDrawChartDataSets(false);
-        assertFalse(renderer.isDrawChartDataSets());
-
         renderer.setDrawMarker(true);
         assertTrue(renderer.isDrawMarker());
         renderer.setDrawMarker(false);
@@ -73,14 +64,11 @@ public class AbstractErrorDataSetRendererParameterTests {
         assertFalse(renderer.isDynamicBarWidth());
 
         for (ErrorStyle eStyle : ErrorStyle.values()) {
-            renderer.setErrorType(eStyle);
+            renderer.setErrorStyle(eStyle);
             assertEquals(eStyle, renderer.getErrorType());
         }
         renderer.setIntensityFading(0.85);
         assertEquals(0.85, renderer.getIntensityFading());
-
-        renderer.setMarkerSize(4);
-        assertEquals(4, renderer.getMarkerSize());
 
         for (LineStyle eStyle : LineStyle.values()) {
             renderer.setPolyLineStyle(eStyle);
@@ -121,12 +109,7 @@ public class AbstractErrorDataSetRendererParameterTests {
      */
     public static class TestErrorDataSetRendererParameter extends AbstractErrorDataSetRendererParameter<TestErrorDataSetRendererParameter> {
         @Override
-        public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<DataSet> render(GraphicsContext gc, Chart chart, int dataSetOffset, ObservableList<DataSet> datasets) {
+        protected void render(GraphicsContext gc, DataSet dataSet, DataSetNode style) {
             throw new UnsupportedOperationException();
         }
 

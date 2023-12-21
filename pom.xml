@@ -21,6 +21,7 @@
     <modules>
         <module>chartfx-acc</module>
         <module>chartfx-chart</module>
+        <module>chartfx-bench</module>
         <module>chartfx-dataset</module>
         <module>chartfx-math</module>
         <module>chartfx-samples</module>
@@ -33,24 +34,24 @@
         <changelist>-SNAPSHOT</changelist>
         <sha1 />
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.moduleName>io.fair-acc.chartfx-parent</project.moduleName>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <project.moduleName>io.fair_acc.chartfx_parent</project.moduleName>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
 
-        <chartfx.javafx.version>13.0.1</chartfx.javafx.version>
-        <chartfx.controlsfx.version>11.1.1</chartfx.controlsfx.version>
-        <chartfx.ikonli.version>11.5.0</chartfx.ikonli.version>
-        <chartfx.icu4j.version>65.1</chartfx.icu4j.version>
+        <!-- starting with javafx 17, the chart will not be garbage collected as soon as a plugin is present -->
+        <chartfx.javafx.version>16</chartfx.javafx.version>
+        <chartfx.controlsfx.version>11.1.2</chartfx.controlsfx.version>
+        <chartfx.ikonli.version>12.3.1</chartfx.ikonli.version>
         <chartfx.javafxsvg.version>1.3.0</chartfx.javafxsvg.version>
-        <version.commons-lang3>3.12.0</version.commons-lang3>
+        <version.commons-lang3>3.13.0</version.commons-lang3>
 
-        <chartfx.slf4j.version>2.0.0-alpha0</chartfx.slf4j.version>
-        <chartfx.junit.jupiter.version>5.7.0</chartfx.junit.jupiter.version>
-        <chartfx.awaitility.version>4.0.3</chartfx.awaitility.version>
-        <chartfx.jacoco.version>0.8.6</chartfx.jacoco.version>
-        <chartfx.surefire.version>3.0.0-M5</chartfx.surefire.version>
+        <chartfx.slf4j.version>2.0.9</chartfx.slf4j.version>
+        <chartfx.junit.jupiter.version>5.10.0</chartfx.junit.jupiter.version>
+        <chartfx.awaitility.version>4.2.0</chartfx.awaitility.version>
+        <chartfx.jacoco.version>0.8.8</chartfx.jacoco.version>
+        <chartfx.surefire.version>3.0.0-M9</chartfx.surefire.version>
 
-        <version.jetbrains.annotations>21.0.1</version.jetbrains.annotations>
+        <version.jetbrains.annotations>24.0.1</version.jetbrains.annotations>
         <version.maven-gpg-plugin>3.0.1</version.maven-gpg-plugin>
     </properties>
 
@@ -63,7 +64,7 @@
 
     <organization>
         <name>GSI Helmholtzzentrum für Schwerionenforschung GmbH</name>
-        <url>http://www.gsi.de</url>
+        <url>https://www.gsi.de</url>
     </organization>
     <url>https://github.com/fair-acc/chart-fx</url>
 
@@ -104,9 +105,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/GSI-CS-CO/chart-fx.git</connection>
-        <developerConnection>scm:git:git@github.com:GSI-CS-CO/chart-fx.git</developerConnection>
-        <url>https://github.com/GSI-CS-CO/chart-fx</url>
+        <connection>scm:git:https://github.com/fair-acc/chart-fx.git</connection>
+        <developerConnection>scm:git:git@github.com:fair-acc/chart-fx.git</developerConnection>
+        <url>https://github.com/fair-acc/chart-fx</url>
     </scm>
 
     <build>
@@ -115,12 +116,12 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-clean-plugin</artifactId>
-                    <version>3.1.0</version>
+                    <version>3.3.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.8.1</version>
+                    <version>3.11.0</version>
                     <configuration>
                         <!-- put your configurations here -->
                     </configuration>
@@ -144,16 +145,17 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-source-plugin</artifactId>
-                    <version>3.0.1</version>
+                    <version>3.3.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>3.0.1</version>
+                    <version>3.0.1</version> <!-- use old version to ignore module system errors -->
                     <configuration>
                         <links>
                             <link>https://openjfx.io/javadoc/12/</link>
                         </links>
+                        <doclint>none</doclint> <!-- TODO: fix javadoc errors -->
                     </configuration>
                     <executions>
                         <execution>
@@ -179,7 +181,7 @@
                 <plugin> <!-- Use current plugin version because of MNG-5346-->
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-plugin-plugin</artifactId>
-                    <version>3.6.0</version>
+                    <version>3.9.0</version>
                 </plugin>
                 <plugin>
                     <groupId>io.fair-acc</groupId>
@@ -280,6 +282,36 @@
         </plugins>
     </build>
 
+    <dependencyManagement> <!-- Some libraries pull in old versions of JavaFX w/ classifiers -->
+        <dependencies>
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-base</artifactId>
+                <version>${chartfx.javafx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-controls</artifactId>
+                <version>${chartfx.javafx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-fxml</artifactId>
+                <version>${chartfx.javafx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-web</artifactId>
+                <version>${chartfx.javafx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-swing</artifactId> <!-- needed to for benchmark saving images to file -->
+                <version>${chartfx.javafx.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -324,7 +356,7 @@
         <dependency>
             <groupId>de.sandec</groupId>
             <artifactId>JMemoryBuddy</artifactId>
-            <version>0.2.6</version>
+            <version>0.5.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -403,7 +435,7 @@
                     <plugin>
                         <groupId>org.sonatype.plugins</groupId>
                         <artifactId>nexus-staging-maven-plugin</artifactId>
-                        <version>1.6.4</version>
+                        <version>1.6.13</version>
                         <extensions>true</extensions>
                         <configuration>
                             <serverId>ossrh</serverId>

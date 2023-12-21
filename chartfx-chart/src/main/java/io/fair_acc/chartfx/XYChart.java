@@ -1,43 +1,31 @@
 package io.fair_acc.chartfx;
 
-import java.security.InvalidParameterException;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
-import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Orientation;
-import javafx.scene.Node;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.util.Duration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import io.fair_acc.bench.DurationMeasure;
+import io.fair_acc.bench.MeasurementRecorder;
 import io.fair_acc.chartfx.axes.Axis;
+import io.fair_acc.chartfx.axes.spi.AxisRange;
+import io.fair_acc.chartfx.plugins.ChartPlugin;
 import io.fair_acc.chartfx.renderer.PolarTickStep;
 import io.fair_acc.chartfx.renderer.Renderer;
 import io.fair_acc.chartfx.renderer.spi.ErrorDataSetRenderer;
 import io.fair_acc.chartfx.renderer.spi.GridRenderer;
 import io.fair_acc.chartfx.renderer.spi.LabelledMarkerRenderer;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
 import io.fair_acc.chartfx.ui.geometry.Side;
 import io.fair_acc.chartfx.utils.FXUtils;
+import io.fair_acc.chartfx.utils.PropUtil;
 import io.fair_acc.dataset.DataSet;
+import io.fair_acc.dataset.events.ChartBits;
 import io.fair_acc.dataset.utils.AssertUtils;
 
 /**
@@ -52,19 +40,13 @@ import io.fair_acc.dataset.utils.AssertUtils;
  * @author rstein
  */
 public class XYChart extends Chart {
-    private static final Logger LOGGER = LoggerFactory.getLogger(XYChart.class);
     protected static final int BURST_LIMIT_MS = 15;
     protected final BooleanProperty polarPlot = new SimpleBooleanProperty(this, "polarPlot", false);
     private final ObjectProperty<PolarTickStep> polarStepSize = new SimpleObjectProperty<>(PolarTickStep.THIRTY);
-    private final GridRenderer gridRenderer = new GridRenderer();
-    protected final ChangeListener<? super Boolean> gridLineVisibilitychange = (ob, o, n) -> requestLayout();
-    private long lastCanvasUpdate;
-    private boolean callCanvasUpdateLater;
-    private final ChangeListener<Side> axisSideChangeListener = this::axisSideChanged;
+    private final GridRenderer gridRenderer = new GridRenderer(this);
 
     /**
      * Construct a new XYChart with the given axes.
-     *
      */
     public XYChart() {
         this(new Axis[] {}); // NOPMD NOSONAR
@@ -98,16 +80,28 @@ public class XYChart extends Chart {
             getAxes().add(axis);
         }
 
-        gridRenderer.horizontalGridLinesVisibleProperty().addListener(gridLineVisibilitychange);
-        gridRenderer.verticalGridLinesVisibleProperty().addListener(gridLineVisibilitychange);
-        gridRenderer.getHorizontalMinorGrid().visibleProperty().addListener(gridLineVisibilitychange);
-        gridRenderer.getVerticalMinorGrid().visibleProperty().addListener(gridLineVisibilitychange);
-        gridRenderer.drawOnTopProperty().addListener(gridLineVisibilitychange);
+        styleableNodes.getChildren().add(gridRenderer);
+        PropUtil.runOnChange(getBitState().onAction(ChartBits.ChartCanvas),
+                gridRenderer.getHorizontalMajorGrid().changeCounterProperty(),
+                gridRenderer.getHorizontalMinorGrid().changeCounterProperty(),
+                gridRenderer.getVerticalMajorGrid().changeCounterProperty(),
+                gridRenderer.getVerticalMinorGrid().changeCounterProperty(),
+                gridRenderer.drawOnTopProperty());
 
-        this.setAnimated(false);
         getRenderers().addListener(this::rendererChanged);
 
+        // TODO: get rid of default instance. It's created if anyone wants to use getDatasets()
         getRenderers().add(new ErrorDataSetRenderer());
+    }
+
+    /**
+     * @return datasets of the first renderer. Creates a renderer if needed.
+     */
+    public ObservableList<DataSet> getDatasets() {
+        if (getRenderers().isEmpty()) {
+            getRenderers().add(new ErrorDataSetRenderer());
+        }
+        return getRenderers().get(0).getDatasets();
     }
 
     /**
@@ -120,9 +114,12 @@ public class XYChart extends Chart {
         }
 
         allDataSets.clear();
-        allDataSets.addAll(getDatasets());
-        getRenderers().stream().filter(renderer -> !(renderer instanceof LabelledMarkerRenderer)).forEach(renderer -> allDataSets.addAll(renderer.getDatasets()));
-
+        for (Renderer renderer : getRenderers()) {
+            if (renderer instanceof LabelledMarkerRenderer) {
+                continue;
+            }
+            allDataSets.addAll(renderer.getDatasets());
+        }
         return allDataSets;
     }
 
@@ -132,7 +129,6 @@ public class XYChart extends Chart {
      */
     public ObservableList<DataSet> getAllShownDatasets() {
         final ObservableList<DataSet> ret = FXCollections.observableArrayList();
-        ret.addAll(getDatasets());
         getRenderers().stream().filter(Renderer::showInLegend).forEach(renderer -> ret.addAll(renderer.getDatasets()));
         return ret;
     }
@@ -167,39 +163,12 @@ public class XYChart extends Chart {
     }
 
     /**
-     * Indicates whether horizontal grid lines are visible or not.
-     *
-     * @return horizontalGridLinesVisible property
-     */
-    public final BooleanProperty horizontalGridLinesVisibleProperty() {
-        return gridRenderer.horizontalGridLinesVisibleProperty();
-    }
-
-    /**
-     * Indicates whether horizontal grid lines are visible.
-     *
-     * @return {@code true} if horizontal grid lines are visible else {@code false}.
-     */
-    public final boolean isHorizontalGridLinesVisible() {
-        return horizontalGridLinesVisibleProperty().get();
-    }
-
-    /**
      * whether renderer should use polar coordinates (x -&gt; interpreted as phi, y as radial coordinate)
      *
      * @return true if renderer is plotting in polar coordinates
      */
     public final boolean isPolarPlot() {
         return polarPlotProperty().get();
-    }
-
-    /**
-     * Indicates whether vertical grid lines are visible.
-     *
-     * @return {@code true} if vertical grid lines are visible else {@code false}.
-     */
-    public final boolean isVerticalGridLinesVisible() {
-        return verticalGridLinesVisibleProperty().get();
     }
 
     /**
@@ -213,15 +182,6 @@ public class XYChart extends Chart {
 
     public ObjectProperty<PolarTickStep> polarStepSizeProperty() {
         return polarStepSize;
-    }
-
-    /**
-     * Sets the value of the {@link #verticalGridLinesVisibleProperty()}.
-     *
-     * @param value {@code true} to make vertical lines visible
-     */
-    public final void setHorizontalGridLinesVisible(final boolean value) {
-        horizontalGridLinesVisibleProperty().set(value);
     }
 
     /**
@@ -239,55 +199,39 @@ public class XYChart extends Chart {
         polarStepSizeProperty().set(step);
     }
 
-    /**
-     * Sets the value of the {@link #verticalGridLinesVisibleProperty()}.
-     *
-     * @param value {@code true} to make vertical lines visible
-     */
-    public final void setVerticalGridLinesVisible(final boolean value) {
-        verticalGridLinesVisibleProperty().set(value);
-    }
-
     @Override
     public void updateAxisRange() {
-        if (isDataEmpty()) {
-            return;
+        // Update the axis definitions of all datasets. We do it here, so we can make better
+        // use of multi-threading. The datasets are already locked, so we can use a parallel
+        // stream without extra synchronization.
+        getRenderers().stream().flatMap(renderer -> renderer.getDatasetNodes().stream()).filter(DataSetNode::isVisible).map(DataSetNode::getDataSet).filter(ds -> ds.getBitState().isDirty(ChartBits.DataSetData, ChartBits.DataSetRange)).distinct().forEach(dataset -> dataset.getAxisDescriptions().parallelStream().filter(axisD -> !axisD.isDefined() || axisD.getBitState().isDirty()).forEach(axisDescription -> dataset.recomputeLimits(axisDescription.getDimIndex())));
+
+        // Update each axis
+        for (Axis axis : getAxes()) {
+            // Determine the current range
+            axisRange.clear();
+            for (Renderer renderer : getRenderers()) {
+                renderer.updateAxisRange(axis, axisRange);
+            }
+
+            // Update the internal auto range
+            boolean changed = false;
+            if (axis.isAutoGrowRanging() && axis.getAutoRange().isDefined()) {
+                if (axisRange.isDefined()) {
+                    changed = axis.getAutoRange().add(axisRange);
+                }
+            } else {
+                changed = axis.getAutoRange().set(axisRange.getMin(), axisRange.getMax());
+            }
+
+            // Trigger a redraw
+            if (changed && (axis.isAutoRanging() || axis.isAutoGrowRanging())) {
+                axis.invalidateRange();
+            }
         }
-
-        // lock datasets to prevent writes while updating the axes
-        ObservableList<DataSet> dataSets = this.getAllDatasets();
-        // check that all registered data sets have proper ranges defined
-        dataSets.parallelStream()
-                .forEach(dataset -> dataset.getAxisDescriptions().parallelStream().filter(axisD -> !axisD.isDefined()).forEach(axisDescription -> dataset.lock().writeLockGuard(() -> dataset.recomputeLimits(axisDescription.getDimIndex()))));
-
-        final ArrayDeque<DataSet> lockQueue = new ArrayDeque<>(dataSets);
-        recursiveLockGuard(lockQueue, () -> getAxes().forEach(chartAxis -> {
-            final List<DataSet> dataSetForAxis = getDataSetForAxis(chartAxis);
-            updateNumericAxis(chartAxis, dataSetForAxis);
-            // chartAxis.requestAxisLayout()
-        }));
     }
 
-    protected void recursiveLockGuard(final Deque<DataSet> queue, final Runnable runnable) { // NOPMD
-        if (queue.isEmpty()) {
-            runnable.run();
-        } else {
-            queue.pop().lock().readLockGuard(() -> recursiveLockGuard(queue, runnable));
-        }
-    }
-
-    /**
-     * Indicates whether vertical grid lines are visible or not.
-     *
-     * @return verticalGridLinesVisible property
-     */
-    public final BooleanProperty verticalGridLinesVisibleProperty() {
-        return gridRenderer.verticalGridLinesVisibleProperty();
-    }
-
-    private boolean isDataEmpty() {
-        return getAllDatasets() == null || getAllDatasets().isEmpty();
-    }
+    private final AxisRange axisRange = new AxisRange();
 
     /**
      * add XYChart specific axis handling (ie. placement around charts, add new DefaultNumericAxis if one is missing,
@@ -300,199 +244,90 @@ public class XYChart extends Chart {
         while (change.next()) {
             change.getRemoved().forEach(axis -> {
                 AssertUtils.notNull("to be removed axis is null", axis);
-                // check if axis is associated with an existing renderer, if yes
-                // -&gt; throw an exception
-                // remove from axis.side property side listener
-                removeFromAllAxesPanes(axis);
-                axis.sideProperty().removeListener(axisSideChangeListener);
+                // TODO: throw an exception if axis is associated with an existing renderer?
             });
 
             change.getAddedSubList().forEach(axis -> {
                 // check if axis is associated with an existing renderer,
                 // if yes -&gt; throw an exception
                 AssertUtils.notNull("to be added axis is null", axis);
-
-                final Side side = axis.getSide();
-                if (side == null) {
-                    throw new InvalidParameterException("axis '" + axis.getName() + "' has 'null' as side being set");
-                }
-                if (axis instanceof Node && !getAxesPane(axis.getSide()).getChildren().contains(axis)) {
-                    getAxesPane(axis.getSide()).getChildren().add((Node) axis);
-                }
-
-                axis.sideProperty().addListener(axisSideChangeListener);
             });
         }
 
-        requestLayout();
-    }
-
-    protected void axisSideChanged(final ObservableValue<? extends Side> change, final Side oldValue, final Side newValue) {
-        if (newValue != null && newValue.equals(oldValue)) {
-            return;
-        }
-        // loop through all registered axis
-        for (final Axis axis : axesList) {
-            if (axis.getSide() == null) {
-                // remove axis from all axis panes
-                removeFromAllAxesPanes(axis);
-            }
-
-            // check if axis is in correct pane
-            if (axis instanceof Node && getAxesPane(axis.getSide()).getChildren().contains(axis)) {
-                // yes, it is continue with next axis
-                continue;
-            }
-            // axis needs to be moved to new pane location
-            // first: remove axis from all axis panes
-            removeFromAllAxesPanes(axis);
-
-            // second: add axis to correct axis pane
-            getAxesPane(axis.getSide()).getChildren().add((Node) axis);
-        }
-        requestLayout();
-    }
-
-    /**
-     * checks whether renderer has required x and y axes and adds the first x or y from the chart itself if necessary
-     * <p>
-     * additionally moves axis from Renderer with defined Side that are not yet in the Chart also to the chart's list
-     *
-     * @param renderer to be checked
-     */
-    protected void checkRendererForRequiredAxes(final Renderer renderer) {
-        if (renderer.getAxes().size() < 2) {
-            // not enough axes present in renderer
-            Optional<Axis> xAxis = renderer.getAxes().stream().filter(a -> a.getSide().isHorizontal()).findFirst();
-            Optional<Axis> yAxis = renderer.getAxes().stream().filter(a -> a.getSide().isVertical()).findFirst();
-
-            // search for horizontal/vertical axes in Chart (which creates one if missing) and add to renderer
-            if (xAxis.isEmpty()) {
-                renderer.getAxes().add(getFirstAxis(Orientation.HORIZONTAL));
-            }
-            if (yAxis.isEmpty()) {
-                // search for horizontal axis in Chart (which creates one if missing) and add to renderer
-                renderer.getAxes().add(getFirstAxis(Orientation.VERTICAL));
-            }
-        }
-        // check if there are assignable axes not yet present in the Chart's list
-        getAxes().addAll(renderer.getAxes().stream().limit(2).filter(a -> (a.getSide() != null && !getAxes().contains(a))).collect(Collectors.toList()));
-    }
-
-    protected List<DataSet> getDataSetForAxis(final Axis axis) {
-        final List<DataSet> retVal = new ArrayList<>();
-        if (axis == null) {
-            return retVal;
-        }
-        retVal.addAll(getDatasets());
-        getRenderers().forEach(renderer -> renderer.getAxes().stream().filter(axis::equals).forEach(rendererAxis -> retVal.addAll(renderer.getDatasets())));
-        return retVal;
+        invalidate();
     }
 
     @Override
     protected void redrawCanvas() {
-        if (DEBUG && LOGGER.isDebugEnabled()) {
-            LOGGER.debug("   xychart redrawCanvas() - pre");
-        }
-        setAutoNotification(false);
         FXUtils.assertJavaFxThread();
-        final long now = System.nanoTime();
-        final double diffMillisSinceLastUpdate = TimeUnit.NANOSECONDS.toMillis(now - lastCanvasUpdate);
-        if (diffMillisSinceLastUpdate < XYChart.BURST_LIMIT_MS) {
-            if (!callCanvasUpdateLater) {
-                callCanvasUpdateLater = true;
-                // repaint 20 ms later in case this was just a burst operation
-                final KeyFrame kf1 = new KeyFrame(Duration.millis(20), e -> requestLayout());
-
-                final Timeline timeline = new Timeline(kf1);
-                Platform.runLater(timeline::play);
-            }
-
-            return;
-        }
-        if (DEBUG && LOGGER.isDebugEnabled()) {
-            LOGGER.debug("   xychart redrawCanvas() - executing");
-            LOGGER.debug("   xychart redrawCanvas() - canvas size = {}", String.format("%fx%f", canvas.getWidth(), canvas.getHeight()));
-        }
-
-        lastCanvasUpdate = now;
-        callCanvasUpdateLater = false;
 
         final GraphicsContext gc = canvas.getGraphicsContext2D();
         gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
 
+        // Bottom grid
         if (!gridRenderer.isDrawOnTop()) {
-            gridRenderer.render(gc, this, 0, null);
+            benchDrawGrid.start();
+            gridRenderer.render();
+            benchDrawGrid.stop();
         }
 
-        int dataSetOffset = 0;
+        // Data
+        benchDrawData.start();
         for (final Renderer renderer : getRenderers()) {
-            // check for and add required axes
-            checkRendererForRequiredAxes(renderer);
-
-            final List<DataSet> drawnDataSets = renderer.render(gc, this, dataSetOffset, getDatasets());
-            dataSetOffset += drawnDataSets == null ? 0 : drawnDataSets.size();
+            renderer.render();
         }
+        benchDrawData.stop();
 
+        // Top grid
         if (gridRenderer.isDrawOnTop()) {
-            gridRenderer.render(gc, this, 0, null);
-        }
-        setAutoNotification(true);
-        if (DEBUG && LOGGER.isDebugEnabled()) {
-            LOGGER.debug("   xychart redrawCanvas() - done");
+            benchDrawGrid.start();
+            gridRenderer.render();
+            benchDrawGrid.stop();
         }
     }
 
-    protected static void updateNumericAxis(final Axis axis, final List<DataSet> dataSets) {
-        if (dataSets == null || dataSets.isEmpty()) {
-            return;
+    /**
+     * @param recorder recorder for this chart and all nested components
+     */
+    public void setGlobalRecorder(MeasurementRecorder recorder) {
+        setRecorder(recorder);
+        int i = 0;
+        for (var renderer : getRenderers()) {
+            var p = recorder.addPrefix("renderer" + i);
+            renderer.setRecorder(p);
+            int dsIx = 0;
+            for (var dataset : renderer.getDatasets()) {
+                dataset.setRecorder(p.addPrefix("ds" + dsIx));
+                dataset.lock().setRecorder(p.addPrefix("ds" + dsIx));
+                dsIx++;
+            }
+            i++;
         }
-        final boolean oldAutoState = axis.autoNotification().getAndSet(false);
-        final double oldMin = axis.getAutoRange().getMin();
-        final double oldMax = axis.getAutoRange().getMax();
-        final double oldLength = axis.getLength();
-
-        final boolean isHorizontal = axis.getSide().isHorizontal();
-        final Side side = axis.getSide();
-        axis.getAutoRange().clear();
-        dataSets.stream().filter(DataSet::isVisible).forEach(dataset -> dataset.lock().readLockGuard(() -> {
-            if (dataset.getDimension() > 2 && (side == Side.RIGHT || side == Side.TOP)) {
-                if (!dataset.getAxisDescription(DataSet.DIM_Z).isDefined()) {
-                    dataset.recomputeLimits(DataSet.DIM_Z);
-                }
-                axis.getAutoRange().add(dataset.getAxisDescription(DataSet.DIM_Z).getMin());
-                axis.getAutoRange().add(dataset.getAxisDescription(DataSet.DIM_Z).getMax());
+        gridRenderer.setRecorder(recorder);
+        i = 0;
+        for (Axis axis : getAxes()) {
+            if (axis == getXAxis()) {
+                axis.setRecorder(recorder.addPrefix("x"));
+            } else if (axis == getYAxis()) {
+                axis.setRecorder(recorder.addPrefix("y"));
             } else {
-                final int nDim = isHorizontal ? DataSet.DIM_X : DataSet.DIM_Y;
-                if (!dataset.getAxisDescription(nDim).isDefined()) {
-                    dataset.recomputeLimits(nDim);
-                }
-                axis.getAutoRange().add(dataset.getAxisDescription(nDim).getMin());
-                axis.getAutoRange().add(dataset.getAxisDescription(nDim).getMax());
+                axis.setRecorder(recorder.addPrefix("axis" + i));
             }
-        }));
-
-        // handling of numeric axis and auto-range or auto-grow setting only
-        if (!axis.isAutoRanging() && !axis.isAutoGrowRanging()) {
-            if (oldMin != axis.getMin() || oldMax != axis.getMax() || oldLength != axis.getLength()) {
-                axis.requestAxisLayout();
-            }
-            axis.autoNotification().set(oldAutoState);
-            return;
+            i++;
         }
-
-        if (axis.isAutoGrowRanging()) {
-            axis.getAutoRange().add(oldMin);
-            axis.getAutoRange().add(oldMax);
+        i = 0;
+        for (ChartPlugin plugin : getPlugins()) {
+            plugin.setRecorder(recorder.addPrefix("plugin" + i++));
         }
-
-        axis.getAutoRange().setAxisLength(axis.getLength() == 0 ? 1 : axis.getLength(), side);
-        axis.getUserRange().setAxisLength(axis.getLength() == 0 ? 1 : axis.getLength(), side);
-        axis.invalidateRange(null);
-
-        if (oldMin != axis.getMin() || oldMax != axis.getMax() || oldLength != axis.getLength()) {
-            axis.requestAxisLayout();
-        }
-        axis.autoNotification().set(oldAutoState);
     }
+
+    @Override
+    public void setRecorder(MeasurementRecorder recorder) {
+        benchDrawData = recorder.newDuration("xychart-drawData");
+        benchDrawGrid = recorder.newDuration("xychart-drawGrid");
+        super.setRecorder(recorder);
+    }
+
+    private DurationMeasure benchDrawData = DurationMeasure.DISABLED;
+    private DurationMeasure benchDrawGrid = DurationMeasure.DISABLED;
 }

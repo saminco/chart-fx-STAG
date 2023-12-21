@@ -13,11 +13,6 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 
-import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.DataSetError;
-import io.fair_acc.dataset.spi.DataSetBuilder;
-import io.fair_acc.dataset.spi.DefaultDataSet;
-import io.fair_acc.dataset.spi.DoubleErrorDataSet;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +20,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+
+import io.fair_acc.dataset.DataSet;
+import io.fair_acc.dataset.DataSetError;
+import io.fair_acc.dataset.spi.DataSetBuilder;
+import io.fair_acc.dataset.spi.DefaultDataSet;
+import io.fair_acc.dataset.spi.DoubleErrorDataSet;
 
 /**
  * @author akrimm
@@ -255,6 +256,7 @@ class DataSetUtilsTest {
                                         .setMetaInfoMap(Map.of("metaInt", "1337", "metaString", "testMetaInfo", "metaDouble", "1.337", "metaEng", "1.33e-7", "acqStamp",
                                                 Long.toString(acqStamp)))
                                         .build();
+        dataSet.recomputeLimits();
         assertEquals("file.bin.gz", DataSetUtils.getFileName(dataSet, "file.bin.gz"));
         assertEquals("file_metaDataFieldMissing.bin.gz", DataSetUtils.getFileName(dataSet, "file_{}.bin.gz"));
         assertEquals("dsName", DataSetUtils.getFileName(dataSet, "{dataSetName}"));

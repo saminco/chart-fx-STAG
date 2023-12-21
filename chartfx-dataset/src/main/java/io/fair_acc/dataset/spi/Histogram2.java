@@ -8,7 +8,7 @@ import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSetMetaData;
 import io.fair_acc.dataset.Histogram1D;
 import io.fair_acc.dataset.Histogram2D;
-import io.fair_acc.dataset.event.UpdatedDataEvent;
+import io.fair_acc.dataset.events.ChartBits;
 import io.fair_acc.dataset.utils.AssertUtils;
 
 /**
@@ -21,7 +21,7 @@ public class Histogram2 extends AbstractHistogram implements Histogram2D {
 
     /**
      * Creates 2D histogram with name and ranges [minX, maxX] and [minY, maxY]
-     * 
+     *
      * @param name of the data sets
      * @param nBinsX number of horizontal bins
      * @param minX minimum of horizontal range
@@ -61,7 +61,7 @@ public class Histogram2 extends AbstractHistogram implements Histogram2D {
             super.addBinContent(bin, w);
             return bin;
         });
-        fireInvalidated(new UpdatedDataEvent(this, "fill()"));
+        fireInvalidated(ChartBits.DataSetData);
         return ret;
     }
 

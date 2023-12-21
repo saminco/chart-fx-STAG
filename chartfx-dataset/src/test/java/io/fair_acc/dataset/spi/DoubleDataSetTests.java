@@ -4,14 +4,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
 
-import io.fair_acc.dataset.DataSet;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.fair_acc.dataset.DataSet;
+
 /**
  * Checks for DoubleDataSet interfaces and constructors.
- * 
+ *
  * @author rstein
  */
 public class DoubleDataSetTests extends EditableDataSetTests {
@@ -28,11 +29,11 @@ public class DoubleDataSetTests extends EditableDataSetTests {
         checkAddPoints(firstDataSet, 0); // w/o errors
 
         final DoubleDataSet secondDataSetA = new DoubleDataSet("test", testCoordinate[0], testCoordinate[1], n, true);
-        assertEquals(firstDataSet, secondDataSetA, "DoubleDataSet(via arrays, deep copy) constructor");
+        assertEquals(firstDataSet.recomputeLimits(), secondDataSetA.recomputeLimits(), "DoubleDataSet(via arrays, deep copy) constructor");
 
         final DoubleDataSet secondDataSetB = new DoubleDataSet("test", Arrays.copyOf(testCoordinate[0], n),
                 Arrays.copyOf(testCoordinate[1], n), n, false);
-        assertEquals(firstDataSet, secondDataSetB, "DoubleDataSet(via arrays, no deep copy) constructor");
+        assertEquals(firstDataSet.recomputeLimits(), secondDataSetB.recomputeLimits(), "DoubleDataSet(via arrays, no deep copy) constructor");
 
         checkAddPoints(firstDataSet, 1); // X, Y, and label
 
@@ -50,7 +51,7 @@ public class DoubleDataSetTests extends EditableDataSetTests {
 
         firstDataSet.addDataStyle(0, "color: red");
         final DoubleDataSet thirdDataSet = new DoubleDataSet(firstDataSet);
-        assertEquals(firstDataSet, thirdDataSet, "DoubleDataSet(DataSet2D) constructor");
+        assertEquals(firstDataSet.recomputeLimits(), thirdDataSet.recomputeLimits(), "DoubleDataSet(DataSet2D) constructor");
 
         assertNotEquals(0, firstDataSet.getDataCount(), "pre-check clear method");
         firstDataSet.clearData();
@@ -106,8 +107,8 @@ public class DoubleDataSetTests extends EditableDataSetTests {
                 "check '" + dsType + "' diff data count at end of adding");
 
         if (testCase <= 1) {
-            //TODO capacity increases beyond size due to DoubleArrayList's grow(capacity) implementation that increases the capacity by
-            // Min(size + 0.5* size, capacity) ... need to find a work around
+            // TODO capacity increases beyond size due to DoubleArrayList's grow(capacity) implementation that increases the capacity by
+            //  Min(size + 0.5* size, capacity) ... need to find a work around
             assertEquals(dataSet.getDataCount(), dataSet.getCapacity(),
                     "check '" + dsType + "' capacity data count match , test case = " + testCase);
         }
@@ -172,8 +173,8 @@ public class DoubleDataSetTests extends EditableDataSetTests {
                 "check '" + dsType + "' diff data count at end of adding");
 
         if (testCase <= 1) {
-            //TODO capacity increases beyond size due to DoubleArrayList's grow(capacity) implementation that increases the capacity by
-            // Min(size + 0.5* size, capacity) ... need to find a work around
+            // TODO capacity increases beyond size due to DoubleArrayList's grow(capacity) implementation that increases the capacity by
+            //  Min(size + 0.5* size, capacity) ... need to find a work around
             assertEquals(dataSet.getDataCount(), dataSet.getCapacity(),
                     "check '" + dsType + "' capacity data count match , test case = " + testCase);
         }

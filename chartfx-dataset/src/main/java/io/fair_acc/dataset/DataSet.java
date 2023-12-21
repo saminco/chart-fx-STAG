@@ -3,8 +3,11 @@ package io.fair_acc.dataset;
 import java.io.Serializable;
 import java.util.List;
 
-import io.fair_acc.dataset.event.EventSource;
+import io.fair_acc.bench.Measurable;
+import io.fair_acc.dataset.events.ChartBits;
+import io.fair_acc.dataset.events.EventSource;
 import io.fair_acc.dataset.locks.DataSetLock;
+import io.fair_acc.dataset.utils.IndexedStringConsumer;
 
 /**
  * Basic interface for observable data sets.
@@ -13,7 +16,7 @@ import io.fair_acc.dataset.locks.DataSetLock;
  * @author braeun
  * @author rstein
  */
-public interface DataSet extends EventSource, Serializable {
+public interface DataSet extends EventSource, Serializable, Measurable.EmptyDefault {
     int DIM_X = 0;
     int DIM_Y = 1;
     int DIM_Z = 2;
@@ -60,6 +63,25 @@ public interface DataSet extends EventSource, Serializable {
     String getDataLabel(int index);
 
     /**
+     * @return true if the dataset has at least one data label
+     */
+    boolean hasDataLabels();
+
+    /**
+     * @param minIx first index to consider
+     * @param maxIx last index, exclusive
+     * @param consumer action for each specified data label
+     */
+    default void forEachDataLabel(int minIx, int maxIx, IndexedStringConsumer consumer) {
+        for (int i = minIx; i < maxIx; i++) {
+            String value = getDataLabel(i);
+            if (value != null) {
+                consumer.accept(i, value);
+            }
+        }
+    }
+
+    /**
      * @return number of dimensions
      */
     int getDimension();
@@ -83,6 +105,17 @@ public interface DataSet extends EventSource, Serializable {
     String getName();
 
     /**
+     * @return a list of CSS selector classes that should be applied to this dataset
+     */
+    List<String> getStyleClasses();
+
+    /**
+     * @param cssClass a list of css selector classes that should be applied to this dataset
+     * @return this
+     */
+    DataSet addStyleClasses(String... cssClass);
+
+    /**
      * A string representation of the CSS style associated with this specific {@code DataSet}. This is analogous to the
      * "style" attribute of an HTML element. Note that, like the HTML style attribute, this variable contains style
      * properties and values and not the selector portion of a style rule.
@@ -101,6 +134,25 @@ public interface DataSet extends EventSource, Serializable {
     String getStyle(int index);
 
     /**
+     * @return true if the dataset has at least one style
+     */
+    boolean hasStyles();
+
+    /**
+     * @param minIx first index to consider
+     * @param maxIx last index, exclusive
+     * @param consumer action for each specified style
+     */
+    default void forEachStyle(int minIx, int maxIx, IndexedStringConsumer consumer) {
+        for (int i = minIx; i < maxIx; i++) {
+            String value = getStyle(i);
+            if (value != null) {
+                consumer.accept(i, value);
+            }
+        }
+    }
+
+    /**
      * @param dimIndex the dimension index (ie. '0' equals 'X', '1' equals 'Y')
      * @return the x value array
      */
@@ -112,6 +164,21 @@ public interface DataSet extends EventSource, Serializable {
      * @param <D> generics (fluent design)
      */
     <D extends DataSet> DataSetLock<D> lock();
+
+    /**
+     * recomputes the limits of all dimensions
+     *
+     * @return this
+     */
+    default DataSet recomputeLimits() {
+        if (getBitState().isDirty(ChartBits.DataSetData, ChartBits.DataSetRange)) {
+            for (int i = 0; i < getDimension(); i++) {
+                recomputeLimits(i);
+            }
+            getBitState().clear(ChartBits.DataSetData, ChartBits.DataSetRange);
+        }
+        return this;
+    };
 
     /**
      * @param dimIndex the dimension to recompute the range for (-1 for all dimensions)
@@ -152,19 +219,4 @@ public interface DataSet extends EventSource, Serializable {
     default DataSet set(final DataSet other) {
         return set(other, true);
     }
-
-    /**
-     * Returns a boolean flag whether this {@code DataSet} should be rendered.
-     *
-     * @return true if the dataset should be rendered
-     */
-    public boolean isVisible();
-
-    /**
-     * Sets the visibility status of this {@code DataSet}.
-     *
-     * @param visible true: tells renderers to render this dataset
-     * @return itself (fluent design)
-     */
-    public DataSet setVisible(boolean visible);
 }

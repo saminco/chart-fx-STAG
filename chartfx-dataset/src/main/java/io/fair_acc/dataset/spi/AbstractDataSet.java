@@ -1,23 +1,23 @@
 package io.fair_acc.dataset.spi;
 
-import java.util.Map;
-import java.util.List;
-import java.util.LinkedList;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntToDoubleFunction;
 
+import io.fair_acc.bench.DurationMeasure;
+import io.fair_acc.bench.MeasurementRecorder;
 import io.fair_acc.dataset.*;
-import io.fair_acc.dataset.event.*;
-import io.fair_acc.dataset.event.EventListener;
+import io.fair_acc.dataset.events.BitState;
+import io.fair_acc.dataset.events.ChartBits;
 import io.fair_acc.dataset.locks.DataSetLock;
 import io.fair_acc.dataset.locks.DefaultDataSetLock;
 import io.fair_acc.dataset.spi.utils.MathUtils;
 import io.fair_acc.dataset.spi.utils.StringHashMapList;
 import io.fair_acc.dataset.utils.AssertUtils;
+import io.fair_acc.dataset.utils.IndexedStringConsumer;
 
 /**
  * <p>
@@ -37,43 +37,19 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
     private static final long serialVersionUID = -7612136495756923417L;
 
     private static final String[] DEFAULT_AXES_NAME = { "x-Axis", "y-Axis", "z-Axis" };
-    private final transient AtomicBoolean autoNotification = new AtomicBoolean(true);
     private String name;
     protected final int dimension;
-    private boolean isVisible = true;
     private final List<AxisDescription> axesDescriptions = new ArrayList<>();
-    private final transient List<EventListener> updateListeners = Collections.synchronizedList(new LinkedList<>());
+    private final transient BitState state = BitState.initDirty(this);
     private final transient DataSetLock<? extends DataSet> lock = new DefaultDataSetLock<>(this);
     private final StringHashMapList dataLabels = new StringHashMapList();
     private final StringHashMapList dataStyles = new StringHashMapList();
+    private final List<String> styleClasses = new ArrayList<>();
     private final List<String> infoList = new ArrayList<>();
     private final List<String> warningList = new ArrayList<>();
     private final List<String> errorList = new ArrayList<>();
     private transient EditConstraints editConstraints;
     private final Map<String, String> metaInfoMap = new ConcurrentHashMap<>();
-    private final transient AtomicBoolean axisUpdating = new AtomicBoolean(false);
-    protected final transient io.fair_acc.dataset.event.EventListener axisListener = e -> {
-        if (!isAutoNotification() || !(e instanceof AxisChangeEvent) || axisUpdating.get()) {
-            return;
-        }
-
-        axisUpdating.set(true);
-        final AxisChangeEvent evt = (AxisChangeEvent) e;
-        final int axisDim = evt.getDimension();
-        AxisDescription axisdescription = getAxisDescription(axisDim);
-
-        if (!axisdescription.isDefined() && evt instanceof AxisRecomputationEvent) {
-            recomputeLimits(axisDim);
-            // do not invoke this listener as there is no actual update to the data
-            // invokeListener(new AxisRangeChangeEvent(this, "updated axis range for '" + axisdescription.getName() + "' '[" + axisdescription.getUnit() + "]'", axisDim));
-            axisUpdating.set(false);
-            return;
-        }
-
-        // forward axis description event to DataSet listener
-        invokeListener(e);
-        axisUpdating.set(false);
-    };
 
     /**
      * default constructor
@@ -89,8 +65,7 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
         for (int i = 0; i < this.dimension; i++) {
             final String axisName = i < DEFAULT_AXES_NAME.length ? DEFAULT_AXES_NAME[i] : "dim" + (i + 1) + "-Axis";
             final AxisDescription axisDescription = new DefaultAxisDescription(i, axisName, "a.u.");
-            axisDescription.autoNotification().set(false);
-            axisDescription.addListener(axisListener);
+            axisDescription.addListener(state);
             axesDescriptions.add(axisDescription);
         }
     }
@@ -105,7 +80,7 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
      */
     public String addDataLabel(final int index, final String label) {
         final String retVal = lock().writeLockGuard(() -> dataLabels.put(index, label));
-        fireInvalidated(new UpdatedMetaDataEvent(this, "added label"));
+        fireInvalidated(ChartBits.DataSetMetaData);
         return retVal;
     }
 
@@ -119,13 +94,8 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
      */
     public String addDataStyle(final int index, final String style) {
         final String retVal = lock().writeLockGuard(() -> dataStyles.put(index, style));
-        fireInvalidated(new UpdatedMetaDataEvent(this, "added style"));
+        fireInvalidated(ChartBits.DataSetMetaData);
         return retVal;
-    }
-
-    @Override
-    public AtomicBoolean autoNotification() {
-        return autoNotification;
     }
 
     protected int binarySearch(final int dimIndex, final double search, final int indexMin, final int indexMax) {
@@ -153,7 +123,8 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
         infoList.clear();
         warningList.clear();
         errorList.clear();
-        return fireInvalidated(new UpdatedMetaDataEvent(this, "cleared meta data"));
+        fireInvalidated(ChartBits.DataSetMetaData);
+        return getThis();
     }
 
     /**
@@ -376,31 +347,6 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
         return true;
     }
 
-    @Override
-    public boolean isVisible() {
-        return isVisible;
-    }
-
-    @Override
-    public D setVisible(boolean visible) {
-        if (visible != isVisible) {
-            isVisible = visible;
-            fireInvalidated(new UpdatedMetaDataEvent(this, "changed visibility"));
-        }
-        return getThis();
-    }
-
-    /**
-     * Notifies listeners that the data has been invalidated. If the data is added to the chart, it triggers repaint.
-     *
-     * @param event the change event
-     * @return itself (fluent design)
-     */
-    public D fireInvalidated(final UpdateEvent event) {
-        invokeListener(event);
-        return getThis();
-    }
-
     /**
      * @return axis descriptions of the primary and secondary axes
      */
@@ -419,6 +365,21 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
     @Override
     public String getDataLabel(final int index) {
         return dataLabels.get(index);
+    }
+
+    @Override
+    public boolean hasDataLabels() {
+        return !dataLabels.isEmpty();
+    }
+
+    @Override
+    public void forEachDataLabel(int minIx, int maxIx, IndexedStringConsumer consumer) {
+        for (Map.Entry<Integer, String> entry : dataLabels.entrySet()) {
+            int index = entry.getKey();
+            if (index >= minIx && index < maxIx) {
+                consumer.accept(index, entry.getValue());
+            }
+        }
     }
 
     /**
@@ -464,6 +425,45 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
         return name;
     }
 
+    @Override
+    public List<String> getStyleClasses() {
+        return styleClasses;
+    }
+
+    public D addStyleClasses(String... cssClass) {
+        boolean changed = false;
+        for (String selector : cssClass) {
+            if (!styleClasses.contains(selector)) {
+                styleClasses.add(selector);
+                changed = true;
+            }
+        }
+        if (changed) {
+            fireInvalidated(ChartBits.DataSetStyle);
+        }
+        return getThis();
+    }
+
+    public D removeStyleClasses(String... cssClass) {
+        boolean changed = false;
+        for (String selector : cssClass) {
+            changed |= styleClasses.remove(selector);
+        }
+        if (changed) {
+            fireInvalidated(ChartBits.DataSetStyle);
+        }
+        return getThis();
+    }
+
+    @Override
+    public D setStyle(final String style) {
+        if (!Objects.equals(getStyle(), style)) {
+            super.setStyle(style);
+            fireInvalidated(ChartBits.DataSetStyle);
+        }
+        return getThis();
+    }
+
     /**
      * A string representation of the CSS style associated with this specific {@code DataSet} data point. @see
      * #getStyle()
@@ -474,6 +474,21 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
     @Override
     public String getStyle(final int index) {
         return dataStyles.get(index);
+    }
+
+    @Override
+    public boolean hasStyles() {
+        return !dataStyles.isEmpty();
+    }
+
+    @Override
+    public void forEachStyle(int minIx, int maxIx, IndexedStringConsumer consumer) {
+        for (Map.Entry<Integer, String> entry : dataStyles.entrySet()) {
+            int index = entry.getKey();
+            if (index >= minIx && index < maxIx) {
+                consumer.accept(index, entry.getValue());
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -518,7 +533,7 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
      */
     public String removeDataLabel(final int index) {
         final String retVal = lock().writeLockGuard(() -> dataLabels.remove(index));
-        fireInvalidated(new UpdatedMetaDataEvent(this, "removed label"));
+        fireInvalidated(ChartBits.DataSetMetaData);
         return retVal;
     }
 
@@ -531,13 +546,14 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
      */
     public String removeStyle(final int index) {
         final String retVal = lock().writeLockGuard(() -> dataStyles.remove(index));
-        fireInvalidated(new UpdatedMetaDataEvent(this, "removed style"));
+        fireInvalidated(ChartBits.DataSetMetaData);
         return retVal;
     }
 
     public D setEditConstraints(final EditConstraints constraints) {
         lock().writeLockGuard(() -> editConstraints = constraints);
-        return fireInvalidated(new UpdatedMetaDataEvent(this, "new edit constraints"));
+        fireInvalidated(ChartBits.DataSetMetaData);
+        return getThis();
     }
 
     /**
@@ -548,6 +564,7 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
      */
     public D setName(final String name) {
         this.name = name;
+        fireInvalidated(ChartBits.DataSetName);
         return getThis();
     }
 
@@ -663,6 +680,7 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
 
     @Override
     public DataSet recomputeLimits(final int dimIndex) {
+        benchRecomputeLimitsSingle.start();
         // first compute range (does not trigger notify events)
         DataRange newRange = new DataRange();
         final int dataCount = getDataCount();
@@ -671,12 +689,13 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
         }
         // set to new computed one and trigger notify event if different to old limits
         getAxisDescription(dimIndex).set(newRange.getMin(), newRange.getMax());
+        benchRecomputeLimitsSingle.stop();
         return this;
     }
 
     @Override
-    public synchronized List<EventListener> updateEventListener() {
-        return updateListeners;
+    public BitState getBitState() {
+        return state;
     }
 
     protected boolean copyMetaData(final DataSet other) {
@@ -732,4 +751,11 @@ public abstract class AbstractDataSet<D extends AbstractStylable<D>> extends Abs
             this.getAxisDescription(dimIndex).set(other.getAxisDescription(dimIndex));
         }
     }
+
+    @Override
+    public void setRecorder(MeasurementRecorder recorder) {
+        benchRecomputeLimitsSingle = recorder.newDuration("ds-RecomputeLimits-single");
+    }
+
+    private DurationMeasure benchRecomputeLimitsSingle = DurationMeasure.DISABLED;
 }

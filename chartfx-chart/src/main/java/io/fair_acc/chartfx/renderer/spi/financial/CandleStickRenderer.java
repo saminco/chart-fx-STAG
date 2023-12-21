@@ -1,42 +1,25 @@
 package io.fair_acc.chartfx.renderer.spi.financial;
 
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_BAR_WIDTH_PERCENTAGE;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_LONG_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_LONG_WICK_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_SHADOW_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_SHORT_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_SHORT_WICK_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_VOLUME_LONG_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_CANDLESTICK_VOLUME_SHORT_COLOR;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_SHADOW_LINE_WIDTH;
-import static io.fair_acc.chartfx.renderer.spi.financial.css.FinancialCss.DATASET_SHADOW_TRANSPOSITION_PERCENT;
 import static io.fair_acc.dataset.DataSet.DIM_X;
 
-import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import io.fair_acc.chartfx.renderer.spi.utils.DefaultRenderColorScheme;
-import javafx.collections.ObservableList;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
 
-import io.fair_acc.chartfx.Chart;
-import io.fair_acc.chartfx.XYChart;
-import io.fair_acc.chartfx.axes.spi.CategoryAxis;
 import io.fair_acc.chartfx.renderer.Renderer;
 import io.fair_acc.chartfx.renderer.spi.financial.service.OhlcvRendererEpData;
 import io.fair_acc.chartfx.renderer.spi.financial.service.RendererPaintAfterEP;
 import io.fair_acc.chartfx.renderer.spi.financial.service.RendererPaintAfterEPAware;
-import io.fair_acc.chartfx.utils.StyleParser;
+import io.fair_acc.chartfx.ui.css.DataSetNode;
+import io.fair_acc.chartfx.ui.css.StyleUtil;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.spi.financial.OhlcvDataSet;
 import io.fair_acc.dataset.spi.financial.api.attrs.AttributeModelAware;
 import io.fair_acc.dataset.spi.financial.api.ohlcv.IOhlcvItemAware;
-import io.fair_acc.dataset.utils.ProcessingProfiler;
 
 /**
  * Candlestick renderer
@@ -68,6 +51,7 @@ public class CandleStickRenderer extends AbstractFinancialRenderer<CandleStickRe
     protected final List<RendererPaintAfterEP> paintAfterEPS = new ArrayList<>();
 
     public CandleStickRenderer(boolean paintVolume) {
+        StyleUtil.addStyles(this, "candlestick");
         this.paintVolume = paintVolume;
         this.findAreaDistances = paintVolume ? new XMinVolumeMaxAreaDistances() : new XMinAreaDistances();
     }
@@ -80,15 +64,21 @@ public class CandleStickRenderer extends AbstractFinancialRenderer<CandleStickRe
         return paintVolume;
     }
 
+    /**
+     * @param dataSet the data set for which the representative icon should be generated
+     * @param canvas the canvas in which the representative icon should be drawn
+     * @return true if the renderer generates symbols that should be displayed
+     */
     @Override
-    public Canvas drawLegendSymbol(DataSet dataSet, int dsIndex, int width, int height) {
-        var canvas = new Canvas(width, height);
+    public boolean drawLegendSymbol(final DataSetNode dataSet, final Canvas canvas) {
+        final int width = (int) canvas.getWidth();
+        final int height = (int) canvas.getHeight();
         final var gc = canvas.getGraphicsContext2D();
-        final String style = dataSet.getStyle();
 
         gc.save();
-        var candleLongColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_LONG_COLOR, Color.GREEN);
-        var candleShortColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_SHORT_COLOR, Color.RED);
+        final FinancialDataSetNode style = (FinancialDataSetNode) dataSet;
+        var candleLongColor = style.getCandleLongColor();
+        var candleShortColor = style.getCandleShortColor();
 
         gc.setFill(candleLongColor);
         gc.setStroke(candleLongColor);
@@ -103,7 +93,7 @@ public class CandleStickRenderer extends AbstractFinancialRenderer<CandleStickRe
         gc.strokeLine(x, 1, x, height - 3.0);
         gc.restore();
 
-        return canvas;
+        return true;
     }
 
     @Override
@@ -112,169 +102,134 @@ public class CandleStickRenderer extends AbstractFinancialRenderer<CandleStickRe
     }
 
     @Override
-    public List<DataSet> render(final GraphicsContext gc, final Chart chart, final int dataSetOffset,
-            final ObservableList<DataSet> datasets) {
-        if (!(chart instanceof XYChart)) {
-            throw new InvalidParameterException(
-                    "must be derivative of XYChart for renderer - " + this.getClass().getSimpleName());
-        }
-        final var xyChart = (XYChart) chart;
-
-        // make local copy and add renderer specific data sets
-        final List<DataSet> localDataSetList = new ArrayList<>(datasets);
-        localDataSetList.addAll(super.getDatasets());
-
-        long start = 0;
-        if (ProcessingProfiler.getDebugState()) {
-            start = ProcessingProfiler.getTimeStamp();
+    protected void render(GraphicsContext gc, DataSet ds, DataSetNode styleNode) {
+        if (ds.getDimension() < 7) {
+            return;
         }
 
-        final var xAxis = xyChart.getXAxis();
-        final var yAxis = xyChart.getYAxis();
+        AttributeModelAware attrs = null;
+        if (ds instanceof AttributeModelAware) {
+            attrs = (AttributeModelAware) ds;
+        }
+        IOhlcvItemAware itemAware = null;
+        if (ds instanceof IOhlcvItemAware) {
+            itemAware = (IOhlcvItemAware) ds;
+        }
+        boolean isEpAvailable = !paintAfterEPS.isEmpty() || paintBarMarker != null;
 
-        final double xAxisWidth = xAxis.getWidth();
-        final double xmin = xAxis.getValueForDisplay(0);
-        final double xmax = xAxis.getValueForDisplay(xAxisWidth);
-        var index = 0;
+        gc.save();
 
-        for (final DataSet ds : localDataSetList) {
-            if (!ds.isVisible() || ds.getDimension() < 7)
-                continue;
-            final int lindex = index;
+        // default styling level
+        FinancialDataSetNode style = (FinancialDataSetNode) styleNode;
+        gc.setLineWidth(style.getLineWidth());
+        gc.setLineDashes(style.getLineDashes());
 
-            ds.lock().readLockGuardOptimistic(() -> {
-                // update categories in case of category axes for the first (index == '0') indexed data set
-                if (lindex == 0 && xyChart.getXAxis() instanceof CategoryAxis) {
-                    final CategoryAxis axis = (CategoryAxis) xyChart.getXAxis();
-                    axis.updateCategories(ds);
-                }
-                AttributeModelAware attrs = null;
-                if (ds instanceof AttributeModelAware) {
-                    attrs = (AttributeModelAware) ds;
-                }
-                IOhlcvItemAware itemAware = null;
-                if (ds instanceof IOhlcvItemAware) {
-                    itemAware = (IOhlcvItemAware) ds;
-                }
-                boolean isEpAvailable = !paintAfterEPS.isEmpty() || paintBarMarker != null;
+        // financial styling level
+        var candleLongColor = style.getCandleLongColor();
+        var candleShortColor = style.getCandleShortColor();
+        var candleLongWickColor = style.getCandleLongWickColor();
+        var candleShortWickColor = style.getCandleShortWickColor();
+        var candleShadowColor = style.getCandleShadowColor();
+        var candleVolumeLongColor = style.getCandleVolumeLongColor();
+        var candleVolumeShortColor = style.getCandleVolumeShortColor();
+        double barWidthPercent = style.getBarWidthPercent();
+        double shadowLineWidth = style.getShadowLineWidth();
+        double shadowTransPercent = style.getShadowTransPercent();
 
-                gc.save();
-                // default styling level
-                String style = ds.getStyle();
-                DefaultRenderColorScheme.setLineScheme(gc, style, lindex);
-                DefaultRenderColorScheme.setGraphicsContextAttributes(gc, style);
-                // financial styling level
-                var candleLongColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_LONG_COLOR, Color.GREEN);
-                var candleShortColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_SHORT_COLOR, Color.RED);
-                var candleLongWickColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_LONG_WICK_COLOR, Color.BLACK);
-                var candleShortWickColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_SHORT_WICK_COLOR, Color.BLACK);
-                var candleShadowColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_SHADOW_COLOR, null);
-                var candleVolumeLongColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_VOLUME_LONG_COLOR, Color.rgb(139, 199, 194, 0.2));
-                var candleVolumeShortColor = StyleParser.getColorPropertyValue(style, DATASET_CANDLESTICK_VOLUME_SHORT_COLOR, Color.rgb(235, 160, 159, 0.2));
-                double barWidthPercent = StyleParser.getFloatingDecimalPropertyValue(style, DATASET_CANDLESTICK_BAR_WIDTH_PERCENTAGE, 0.5d);
-                double shadowLineWidth = StyleParser.getFloatingDecimalPropertyValue(style, DATASET_SHADOW_LINE_WIDTH, 2.5d);
-                double shadowTransPercent = StyleParser.getFloatingDecimalPropertyValue(style, DATASET_SHADOW_TRANSPOSITION_PERCENT, 0.5d);
+        if (ds.getDataCount() > 0) {
+            int iMin = ds.getIndex(DIM_X, xMin);
+            if (iMin < 0)
+                iMin = 0;
+            int iMax = Math.min(ds.getIndex(DIM_X, xMax) + 1, ds.getDataCount());
 
-                if (ds.getDataCount() > 0) {
-                    int iMin = ds.getIndex(DIM_X, xmin);
-                    if (iMin < 0)
-                        iMin = 0;
-                    int iMax = Math.min(ds.getIndex(DIM_X, xmax) + 1, ds.getDataCount());
-
-                    double[] distances = null;
-                    var minRequiredWidth = 0.0;
-                    if (lindex == 0) {
-                        distances = findAreaDistances(findAreaDistances, ds, xAxis, yAxis, xmin, xmax);
-                        minRequiredWidth = distances[0];
-                    }
-                    double localBarWidth = minRequiredWidth * barWidthPercent;
-                    double barWidthHalf = localBarWidth / 2.0;
-
-                    for (int i = iMin; i < iMax; i++) {
-                        double x0 = xAxis.getDisplayPosition(ds.get(DIM_X, i));
-                        double yOpen = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_OPEN, i));
-                        double yHigh = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_HIGH, i));
-                        double yLow = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_LOW, i));
-                        double yClose = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_CLOSE, i));
-
-                        double yDiff = yOpen - yClose;
-                        double yMin = yDiff > 0 ? yClose : yOpen;
-
-                        // prepare extension point data (if EPs available)
-                        OhlcvRendererEpData data = null;
-                        if (isEpAvailable) {
-                            data = new OhlcvRendererEpData();
-                            data.gc = gc;
-                            data.ds = ds;
-                            data.attrs = attrs;
-                            data.ohlcvItemAware = itemAware;
-                            data.ohlcvItem = itemAware != null ? itemAware.getItem(i) : null;
-                            data.index = i;
-                            data.minIndex = iMin;
-                            data.maxIndex = iMax;
-                            data.barWidth = localBarWidth;
-                            data.barWidthHalf = barWidthHalf;
-                            data.xCenter = x0;
-                            data.yOpen = yOpen;
-                            data.yHigh = yHigh;
-                            data.yLow = yLow;
-                            data.yClose = yClose;
-                            data.yDiff = yDiff;
-                            data.yMin = yMin;
-                        }
-
-                        // paint volume
-                        if (paintVolume) {
-                            assert distances != null;
-                            paintVolume(gc, ds, i, candleVolumeLongColor, candleVolumeShortColor, yAxis, distances, localBarWidth, barWidthHalf, x0);
-                        }
-
-                        // paint shadow
-                        if (candleShadowColor != null) {
-                            double lineWidth = gc.getLineWidth();
-                            paintCandleShadow(gc,
-                                    candleShadowColor, shadowLineWidth, shadowTransPercent,
-                                    localBarWidth, barWidthHalf, x0, yOpen, yClose, yLow, yHigh, yDiff, yMin);
-                            gc.setLineWidth(lineWidth);
-                        }
-
-                        // choose color of the bar
-                        Paint barPaint = data == null ? null : getPaintBarColor(data);
-
-                        if (yDiff > 0) {
-                            gc.setFill(Objects.requireNonNullElse(barPaint, candleLongColor));
-                            gc.setStroke(Objects.requireNonNullElse(barPaint, candleLongWickColor));
-                        } else {
-                            yDiff = Math.abs(yDiff);
-                            gc.setFill(Objects.requireNonNullElse(barPaint, candleShortColor));
-                            gc.setStroke(Objects.requireNonNullElse(barPaint, candleShortWickColor));
-                        }
-
-                        // paint candle
-                        gc.strokeLine(x0, yLow, x0, yDiff > 0 ? yOpen : yClose);
-                        gc.strokeLine(x0, yHigh, x0, yDiff > 0 ? yClose : yOpen);
-                        gc.fillRect(x0 - barWidthHalf, yMin, localBarWidth, yDiff); // open-close
-                        gc.strokeRect(x0 - barWidthHalf, yMin, localBarWidth, yDiff); // open-close
-
-                        // extension point - paint after painting of candle
-                        if (!paintAfterEPS.isEmpty()) {
-                            paintAfter(data);
-                        }
-                    }
-                }
-                gc.restore();
-            });
-            // possibility to re-arrange y-axis by min/max of dataset (after paint)
-            if (computeLocalRange()) {
-                applyLocalYRange(ds, yAxis, xmin, xmax);
+            double[] distances = null;
+            var minRequiredWidth = 0.0;
+            if (styleNode.getLocalIndex() == 0) {
+                distances = findAreaDistances(findAreaDistances, ds, xAxis, yAxis, xMin, xMax);
+                minRequiredWidth = distances[0];
             }
-            index++;
-        }
-        if (ProcessingProfiler.getDebugState()) {
-            ProcessingProfiler.getTimeDiff(start);
-        }
+            double localBarWidth = minRequiredWidth * barWidthPercent;
+            double barWidthHalf = localBarWidth / 2.0;
 
-        return localDataSetList;
+            for (int i = iMin; i < iMax; i++) {
+                double x0 = xAxis.getDisplayPosition(ds.get(DIM_X, i));
+                double yOpen = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_OPEN, i));
+                double yHigh = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_HIGH, i));
+                double yLow = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_LOW, i));
+                double yClose = yAxis.getDisplayPosition(ds.get(OhlcvDataSet.DIM_Y_CLOSE, i));
+
+                double yDiff = yOpen - yClose;
+                double yMin = yDiff > 0 ? yClose : yOpen;
+
+                // prepare extension point data (if EPs available)
+                OhlcvRendererEpData data = null;
+                if (isEpAvailable) {
+                    data = new OhlcvRendererEpData();
+                    data.gc = gc;
+                    data.ds = ds;
+                    data.style = style;
+                    data.attrs = attrs;
+                    data.ohlcvItemAware = itemAware;
+                    data.ohlcvItem = itemAware != null ? itemAware.getItem(i) : null;
+                    data.index = i;
+                    data.minIndex = iMin;
+                    data.maxIndex = iMax;
+                    data.barWidth = localBarWidth;
+                    data.barWidthHalf = barWidthHalf;
+                    data.xCenter = x0;
+                    data.yOpen = yOpen;
+                    data.yHigh = yHigh;
+                    data.yLow = yLow;
+                    data.yClose = yClose;
+                    data.yDiff = yDiff;
+                    data.yMin = yMin;
+                }
+
+                // paint volume
+                if (paintVolume) {
+                    assert distances != null;
+                    paintVolume(gc, ds, i, candleVolumeLongColor, candleVolumeShortColor, yAxis, distances, localBarWidth, barWidthHalf, x0);
+                }
+
+                // paint shadow
+                if (candleShadowColor != null) {
+                    double lineWidth = gc.getLineWidth();
+                    paintCandleShadow(gc,
+                            candleShadowColor, shadowLineWidth, shadowTransPercent,
+                            localBarWidth, barWidthHalf, x0, yOpen, yClose, yLow, yHigh, yDiff, yMin);
+                    gc.setLineWidth(lineWidth);
+                }
+
+                // choose color of the bar
+                Paint barPaint = data == null ? null : getPaintBarColor(data);
+
+                if (yDiff > 0) {
+                    gc.setFill(Objects.requireNonNullElse(barPaint, candleLongColor));
+                    gc.setStroke(Objects.requireNonNullElse(barPaint, candleLongWickColor));
+                } else {
+                    yDiff = Math.abs(yDiff);
+                    gc.setFill(Objects.requireNonNullElse(barPaint, candleShortColor));
+                    gc.setStroke(Objects.requireNonNullElse(barPaint, candleShortWickColor));
+                }
+
+                // paint candle
+                gc.strokeLine(x0, yLow, x0, yDiff > 0 ? yOpen : yClose);
+                gc.strokeLine(x0, yHigh, x0, yDiff > 0 ? yClose : yOpen);
+                gc.fillRect(x0 - barWidthHalf, yMin, localBarWidth, yDiff); // open-close
+                gc.strokeRect(x0 - barWidthHalf, yMin, localBarWidth, yDiff); // open-close
+
+                // extension point - paint after painting of candle
+                if (!paintAfterEPS.isEmpty()) {
+                    paintAfter(data);
+                }
+            }
+        }
+        gc.restore();
+
+        // possibility to re-arrange y-axis by min/max of dataset (after paint)
+        if (computeLocalRange()) {
+            applyLocalYRange(ds, yAxis, xMin, xMax);
+        }
     }
 
     /**
@@ -306,7 +261,7 @@ public class CandleStickRenderer extends AbstractFinancialRenderer<CandleStickRe
      * @param yDiff              Difference of candle for painting candle body
      * @param yMin               minimal coordination for painting of candle body
      */
-    protected void paintCandleShadow(GraphicsContext gc, Color shadowColor, double shadowLineWidth, double shadowTransPercent, double localBarWidth, double barWidthHalf,
+    protected void paintCandleShadow(GraphicsContext gc, Paint shadowColor, double shadowLineWidth, double shadowTransPercent, double localBarWidth, double barWidthHalf,
             double x0, double yOpen, double yClose, double yLow,
             double yHigh, double yDiff, double yMin) {
         double trans = shadowTransPercent * barWidthHalf;

@@ -3,8 +3,9 @@ package io.fair_acc.dataset.spi;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import io.fair_acc.dataset.DataSet;
 import org.junit.jupiter.api.Test;
+
+import io.fair_acc.dataset.DataSet;
 
 /**
  * Tests for the MultiDimDoubleDataSet
@@ -87,10 +88,6 @@ class MultiDimDoubleDataSetTests {
                 trimArray(dataset.getValues(DataSet.DIM_X), dataset.getDataCount()));
         assertArrayEquals(new double[] { 6, 7, 8 },
                 trimArray(dataset.getValues(DataSet.DIM_Y), dataset.getDataCount()));
-        // test visibility
-        assertTrue(dataset.isVisible());
-        dataset.setVisible(false);
-        assertFalse(dataset.isVisible());
     }
 
     private static double[] trimArray(final double[] values, final int dataCount) {
@@ -119,7 +116,7 @@ class MultiDimDoubleDataSetTests {
         DoubleDataSet doubleDataSet = new DoubleDataSet("doubleTest", new double[] { 1, 2, 3, 4 },
                 new double[] { 10, 20, 30, 40 }, 4, false);
         MultiDimDoubleDataSet multiDimFromDoubleDataSet = new MultiDimDoubleDataSet(doubleDataSet);
-        assertEquals(doubleDataSet, multiDimFromDoubleDataSet);
+        assertEquals(doubleDataSet.recomputeLimits(), multiDimFromDoubleDataSet.recomputeLimits());
         assertEquals(multiDimFromDoubleDataSet, doubleDataSet);
     }
 

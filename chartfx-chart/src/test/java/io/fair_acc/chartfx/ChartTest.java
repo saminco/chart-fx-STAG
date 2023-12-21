@@ -14,6 +14,7 @@ import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.ui.geometry.Side;
 import io.fair_acc.chartfx.ui.utils.JavaFXInterceptorUtils.SelectiveJavaFxInterceptor;
 import io.fair_acc.chartfx.ui.utils.TestFx;
+import io.fair_acc.chartfx.utils.FXUtils;
 
 @ExtendWith(ApplicationExtension.class)
 @ExtendWith(SelectiveJavaFxInterceptor.class)
@@ -22,20 +23,20 @@ public class ChartTest {
     private TestChart chart;
 
     @BeforeEach
-    public void setup() {
-        chart = new TestChart();
+    public void setup() throws Exception {
+        chart = FXUtils.runAndWait(TestChart::new);
     }
 
     @TestFx
     public void setTitlePaint() {
-        chart.setTitlePaint(Color.BLUE);
-        assertEquals(Color.BLUE, chart.getTitlePaint().getTextFill());
+        chart.getTitleLabel().setTextFill(Color.BLUE);
+        assertEquals(Color.BLUE, chart.getTitleLabel().getTextFill());
     }
 
     @TestFx
     public void setTitleSide() {
-        chart.setTitleSide(Side.RIGHT);
-        assertEquals(Side.RIGHT, chart.getTitleSide());
+        chart.getTitleLabel().setSide(Side.RIGHT);
+        assertEquals(Side.RIGHT, chart.getTitleLabel().getSide());
     }
 
     private static class TestChart extends Chart {
@@ -49,10 +50,6 @@ public class ChartTest {
 
         @Override
         protected void redrawCanvas() {
-        }
-
-        public Label getTitlePaint() {
-            return titleLabel;
         }
     }
 }

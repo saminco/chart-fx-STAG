@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.concurrent.TimeUnit;
 
-import io.fair_acc.dataset.spi.DefaultDataSet;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -18,9 +17,11 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.fair_acc.dataset.spi.DefaultDataSet;
+
 /**
  * Tests of DataSetLock
- * 
+ *
  * @author rstein
  * @see DataSetLock
  * @see DefaultDataSetLock
@@ -47,7 +48,6 @@ public class DataSetLockTest {
 
         assertEquals(0, myLockImpl.getReaderCount());
         assertEquals(0, myLockImpl.getWriterCount());
-        Assertions.assertTrue(dataSet.isAutoNotification());
 
         myLock.writeLock().getDataCount();
         if (LOGGER.isDebugEnabled()) {
@@ -204,7 +204,6 @@ public class DataSetLockTest {
 
         Awaitility.await().atMost(1, TimeUnit.SECONDS).until(() -> myLockImpl.getReaderCount() == 0);
         Awaitility.await().atMost(1, TimeUnit.SECONDS).until(() -> myLockImpl.getWriterCount() == 0);
-        Awaitility.await().atMost(1, TimeUnit.SECONDS).until(dataSet::isAutoNotification);
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.atDebug().log("finished - testDataSetLock()");
@@ -260,7 +259,6 @@ public class DataSetLockTest {
         // assert initial state
         assertEquals(0, myLockImpl.getReaderCount());
         assertEquals(0, myLockImpl.getWriterCount());
-        Assertions.assertTrue(dataSet.isAutoNotification());
 
         myLock.readLock();
         assertEquals(0, dataSet.getDataCount());

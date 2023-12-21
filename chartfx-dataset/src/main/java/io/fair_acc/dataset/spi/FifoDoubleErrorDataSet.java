@@ -4,15 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.fair_acc.dataset.AxisDescription;
-import io.fair_acc.dataset.event.AddedDataEvent;
-import io.fair_acc.dataset.event.RemovedDataEvent;
-import io.fair_acc.dataset.event.UpdatedDataEvent;
-import io.fair_acc.dataset.spi.utils.DoublePointError;
-import io.fair_acc.dataset.utils.AssertUtils;
-import io.fair_acc.dataset.utils.LimitedQueue;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.DataSet2D;
 import io.fair_acc.dataset.DataSetError;
+import io.fair_acc.dataset.events.ChartBits;
+import io.fair_acc.dataset.spi.utils.DoublePointError;
+import io.fair_acc.dataset.utils.AssertUtils;
+import io.fair_acc.dataset.utils.LimitedQueue;
 
 /**
  * Limited Fifo DoubleErrorDataSet.
@@ -106,8 +104,7 @@ public class FifoDoubleErrorDataSet extends AbstractErrorDataSet<DoubleErrorData
             // remove old fields if necessary
             expire(x);
         });
-        fireInvalidated(new AddedDataEvent(this));
-
+        fireInvalidated(ChartBits.DataSetDataAdded);
         return this;
     }
 
@@ -151,7 +148,7 @@ public class FifoDoubleErrorDataSet extends AbstractErrorDataSet<DoubleErrorData
                 this.add(xValues[i], yValues[i], yErrorsNeg[i], yErrorsPos[i]);
             }
         });
-        fireInvalidated(new AddedDataEvent(this));
+        fireInvalidated(ChartBits.DataSetDataAdded);
         return this;
     }
 
@@ -181,7 +178,7 @@ public class FifoDoubleErrorDataSet extends AbstractErrorDataSet<DoubleErrorData
             return toRemoveList.size();
         });
         if (dataPointsToRemove != 0) {
-            fireInvalidated(new RemovedDataEvent(this, "expired data"));
+            fireInvalidated(ChartBits.DataSetDataRemoved);
         }
         return dataPointsToRemove;
     }
@@ -235,7 +232,7 @@ public class FifoDoubleErrorDataSet extends AbstractErrorDataSet<DoubleErrorData
      */
     public void reset() {
         data.clear();
-        fireInvalidated(new RemovedDataEvent(this, "reset"));
+        fireInvalidated(ChartBits.DataSetDataRemoved);
     }
 
     /**
@@ -250,7 +247,7 @@ public class FifoDoubleErrorDataSet extends AbstractErrorDataSet<DoubleErrorData
         protected String tag;
 
         protected DataBlob(final double x, final double y, final double errorYNeg, final double errorYPos, final String tag, final String style) {
-            //noinspection SuspiciousNameCombination
+            // noinspection SuspiciousNameCombination
             super(x, y, errorYNeg, errorYPos); // NOPMD NOSONAR - super's x/y error is reinterpreted as +ey -ey in this class
             this.tag = tag;
             this.style = style;
@@ -281,6 +278,7 @@ public class FifoDoubleErrorDataSet extends AbstractErrorDataSet<DoubleErrorData
             copyDataLabelsAndStyles(other, copy);
             copyAxisDescription(other);
         }));
-        return fireInvalidated(new UpdatedDataEvent(this, "set(DataSet, boolean=" + copy + ")"));
+        fireInvalidated(ChartBits.DataSetData);
+        return getThis();
     }
 }

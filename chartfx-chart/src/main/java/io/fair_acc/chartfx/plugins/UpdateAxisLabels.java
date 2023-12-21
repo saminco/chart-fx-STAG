@@ -12,33 +12,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fair_acc.chartfx.Chart;
+import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.Axis;
 import io.fair_acc.chartfx.renderer.Renderer;
 import io.fair_acc.chartfx.utils.FXUtils;
 import io.fair_acc.dataset.DataSet;
-import io.fair_acc.dataset.event.AxisChangeEvent;
-import io.fair_acc.dataset.event.EventListener;
-import io.fair_acc.dataset.event.EventRateLimiter;
-import io.fair_acc.dataset.event.UpdateEvent;
+import io.fair_acc.dataset.events.ChartBits;
+import io.fair_acc.dataset.events.StateListener;
 
 /**
  * This plugin updates the labels (name and unit) of all axes according to DataSet Metadata. For now the axes are only
  * updated, if there is exactly one DataSet in the each Renderer or the Chart.
  *
+ * TODO: revisit this plugin. we should be able to turn this into a single chart listener and an update method (ennerf)
+ * TODO: this is using Chart::getDataSets() which doesn't really exist anymore
+ *
+ * @deprecated prototype which is not usable yet and has to be adopted to the new layout
  * @author akrimm
  */
+@Deprecated
 public class UpdateAxisLabels extends ChartPlugin {
-    private static final int UPDATE_RATE_LIMIT = 200; // maximum label update rate
-
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateAxisLabels.class);
 
     // listener bookkeeping
-    private Map<Renderer, Map<DataSet, EventListener>> rendererDataSetsListeners = new HashMap<>();
-    private Map<DataSet, EventListener> chartDataSetsListeners = new HashMap<>();
-    private Map<Renderer, ListChangeListener<DataSet>> renderersListeners = new HashMap<>();
+    private final Map<Renderer, Map<DataSet, StateListener>> rendererDataSetsListeners = new HashMap<>();
+    private final Map<DataSet, StateListener> chartDataSetsListeners = new HashMap<>();
+    private final Map<Renderer, ListChangeListener<DataSet>> renderersListeners = new HashMap<>();
 
     // called whenever renderers are added or removed
-    private ListChangeListener<Renderer> renderersListener = (ListChangeListener.Change<? extends Renderer> renderersChange) -> {
+    private final ListChangeListener<Renderer> renderersListener = (ListChangeListener.Change<? extends Renderer> renderersChange) -> {
         while (renderersChange.next()) {
             if (renderersChange.wasAdded()) {
                 for (Renderer renderer : renderersChange.getAddedSubList()) {
@@ -48,7 +50,7 @@ public class UpdateAxisLabels extends ChartPlugin {
                         }
                         dataSetsChanged(dataSetsChange, renderer);
                     };
-                    renderer.getDatasets().forEach(ds -> dataSetChange(new AxisChangeEvent(ds, -1), renderer));
+                    renderer.getDatasets().forEach(ds -> dataSetChange(ds, renderer));
                     renderer.getDatasets().addListener(dataSetsListener);
                     renderersListeners.put(renderer, dataSetsListener);
                     if (LOGGER.isDebugEnabled()) {
@@ -67,8 +69,8 @@ public class UpdateAxisLabels extends ChartPlugin {
 
     // called whenever the chart for the plugin is changed
     private final ChangeListener<? super Chart> chartChangeListener = (change, oldChart, newChart) -> {
-        removeRendererAndDataSetListener(oldChart);
-        addRendererAndDataSetListener(newChart);
+        removeRendererAndDataSetListener((XYChart) oldChart);
+        addRendererAndDataSetListener((XYChart) newChart);
     };
 
     /**
@@ -77,10 +79,10 @@ public class UpdateAxisLabels extends ChartPlugin {
     public UpdateAxisLabels() {
         super();
         chartProperty().addListener(chartChangeListener);
-        addRendererAndDataSetListener(getChart());
+        addRendererAndDataSetListener(getXYChart());
     }
 
-    private void addRendererAndDataSetListener(Chart newChart) {
+    private void addRendererAndDataSetListener(XYChart newChart) {
         if (newChart == null) {
             return;
         }
@@ -89,28 +91,18 @@ public class UpdateAxisLabels extends ChartPlugin {
         newChart.getRenderers().forEach((Renderer r) -> setupDataSetListeners(r, r.getDatasets()));
     }
 
+    private XYChart getXYChart() {
+        return (XYChart) super.getChart();
+    }
+
     // the actual DataSet renaming logic
-    private void dataSetChange(UpdateEvent update, Renderer renderer) {
-        if (!(update instanceof AxisChangeEvent)) {
-            return;
-        }
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.atDebug().log("axis - dataSetChange for AxisChangeEvent");
-        }
-        AxisChangeEvent axisDataUpdate = (AxisChangeEvent) update;
-        int dim = axisDataUpdate.getDimension();
-        DataSet dataSet = (DataSet) axisDataUpdate.getSource();
+    private void dataSetChange(DataSet dataSet, Renderer renderer) {
         if (renderer == null) { // dataset was added to / is registered at chart
-            if (getChart().getDatasets().size() == 1) {
-                if (dim == -1) { // update labels for all axes
-                    for (int dimIdx = 0; dimIdx < dataSet.getDimension(); dimIdx++) {
-                        final int dimIndex = dimIdx;
-                        Optional<Axis> oldAxis = getChart().getAxes().stream().filter(axis -> axis.getDimIndex() == dimIndex).findFirst();
-                        oldAxis.ifPresent(a -> a.set(dataSet.getAxisDescription(dimIndex).getName(), dataSet.getAxisDescription(dimIndex).getUnit()));
-                    }
-                } else { // update label for requested axis
-                    Optional<Axis> oldAxis = getChart().getAxes().stream().filter(axis -> axis.getDimIndex() == dim).findFirst();
-                    oldAxis.ifPresent(a -> a.set(dataSet.getAxisDescription(dim).getName(), dataSet.getAxisDescription(dim).getUnit()));
+            if (getXYChart().getDatasets().size() == 1) {
+                for (int dimIdx = 0; dimIdx < dataSet.getDimension(); dimIdx++) {
+                    final int dimIndex = dimIdx;
+                    Optional<Axis> oldAxis = getChart().getAxes().stream().filter(axis -> axis.getDimIndex() == dimIndex).findFirst();
+                    oldAxis.ifPresent(a -> a.set(dataSet.getAxisDescription(dimIndex).getName(), dataSet.getAxisDescription(dimIndex).getUnit()));
                 }
             } else {
                 if (LOGGER.isWarnEnabled()) {
@@ -120,17 +112,11 @@ public class UpdateAxisLabels extends ChartPlugin {
             }
         } else { // dataset was added to / is registered at renderer
             if (renderer.getDatasets().size() == 1) {
-                if (dim == -1) { // update labels for all axes
-                    for (int dimIdx = 0; dimIdx < dataSet.getDimension(); dimIdx++) {
-                        final int dimIndex = dimIdx;
-                        Optional<Axis> oldAxis = renderer.getAxes().stream().filter(axis -> axis.getDimIndex() == dimIndex).findFirst() //
-                                                         .or(() -> getChart().getAxes().stream().filter(axis -> axis.getDimIndex() == dimIndex).findFirst());
-                        oldAxis.ifPresent(a -> a.set(dataSet.getAxisDescription(dimIndex).getName(), dataSet.getAxisDescription(dimIndex).getUnit()));
-                    }
-                } else { // update label for requested axis
-                    Optional<Axis> oldAxis = renderer.getAxes().stream().filter(axis -> axis.getDimIndex() == dim).findFirst() //
-                                                     .or(() -> getChart().getAxes().stream().filter(axis -> axis.getDimIndex() == dim).findFirst());
-                    oldAxis.ifPresent(a -> a.set(dataSet.getAxisDescription(dim).getName(), dataSet.getAxisDescription(dim).getUnit()));
+                for (int dimIdx = 0; dimIdx < dataSet.getDimension(); dimIdx++) {
+                    final int dimIndex = dimIdx;
+                    Optional<Axis> oldAxis = renderer.getAxes().stream().filter(axis -> axis.getDimIndex() == dimIndex).findFirst() //
+                                                     .or(() -> getChart().getAxes().stream().filter(axis -> axis.getDimIndex() == dimIndex).findFirst());
+                    oldAxis.ifPresent(a -> a.set(dataSet.getAxisDescription(dimIndex).getName(), dataSet.getAxisDescription(dimIndex).getUnit()));
                 }
             } else {
                 if (LOGGER.isWarnEnabled()) {
@@ -142,7 +128,7 @@ public class UpdateAxisLabels extends ChartPlugin {
     }
 
     private void dataSetsChanged(ListChangeListener.Change<? extends DataSet> change, Renderer renderer) {
-        Map<DataSet, EventListener> dataSetListeners;
+        Map<DataSet, StateListener> dataSetListeners;
         if (renderer == null) {
             dataSetListeners = chartDataSetsListeners;
         } else if (rendererDataSetsListeners.containsKey(renderer)) {
@@ -157,16 +143,14 @@ public class UpdateAxisLabels extends ChartPlugin {
         while (change.next()) {
             if (change.wasAdded()) {
                 for (DataSet dataSet : change.getAddedSubList()) {
-                    EventListener dataSetListener = update -> FXUtils.runFX(() -> dataSetChange(update, renderer));
-                    EventRateLimiter rateLimitedDataSetListener = new EventRateLimiter(dataSetListener, UPDATE_RATE_LIMIT);
-                    dataSet.addListener(rateLimitedDataSetListener);
-                    dataSetListeners.put(dataSet, rateLimitedDataSetListener);
-                    dataSetChange(new AxisChangeEvent(dataSet, -1), renderer); // NOPMD - normal in-loop instantiation
+                    var dataSetListener = FXUtils.runOnFxThread((src, bits) -> dataSetChange(dataSet, renderer));
+                    dataSet.getBitState().addChangeListener(ChartBits.DataSetName, dataSetListener);
+                    dataSetListeners.put(dataSet, dataSetListener);
                 }
             }
             if (change.wasRemoved()) {
                 for (DataSet dataSet : change.getRemoved()) {
-                    EventListener listener = dataSetListeners.get(dataSet);
+                    var listener = dataSetListeners.get(dataSet);
                     if (listener != null) {
                         dataSet.removeListener(listener);
                         dataSetListeners.remove(dataSet);
@@ -176,7 +160,7 @@ public class UpdateAxisLabels extends ChartPlugin {
         }
     }
 
-    private void removeRendererAndDataSetListener(Chart oldChart) {
+    private void removeRendererAndDataSetListener(XYChart oldChart) {
         if (oldChart == null) {
             return;
         }
@@ -187,7 +171,7 @@ public class UpdateAxisLabels extends ChartPlugin {
 
     // setup all the listeners
     private void setupDataSetListeners(Renderer renderer, ObservableList<DataSet> dataSets) {
-        Map<DataSet, EventListener> dataSetListeners;
+        Map<DataSet, StateListener> dataSetListeners;
         if (renderer == null) {
             dataSetListeners = chartDataSetsListeners;
         } else if (rendererDataSetsListeners.containsKey(renderer)) {
@@ -202,17 +186,15 @@ public class UpdateAxisLabels extends ChartPlugin {
         renderersListeners.put(renderer, rendererListener);
 
         dataSets.forEach((DataSet dataSet) -> {
-            EventListener dataSetListener = update -> FXUtils.runFX(() -> dataSetChange(update, renderer));
-            EventRateLimiter rateLimitedDataSetListener = new EventRateLimiter(dataSetListener, UPDATE_RATE_LIMIT);
-            dataSet.addListener(rateLimitedDataSetListener);
-            dataSetListeners.put(dataSet, rateLimitedDataSetListener);
-            dataSetChange(new AxisChangeEvent(dataSet, -1), renderer);
+            var dataSetListener = FXUtils.runOnFxThread((src, bits) -> dataSetChange(dataSet, renderer));
+            dataSet.getBitState().addChangeListener(ChartBits.DataSetName, dataSetListener);
+            dataSetListeners.put(dataSet, dataSetListener);
         });
     }
 
     // remove Listeners
     private void teardownDataSetListeners(Renderer renderer, ObservableList<DataSet> dataSets) {
-        Map<DataSet, EventListener> dataSetListeners;
+        Map<DataSet, StateListener> dataSetListeners;
         if (renderer == null) {
             dataSetListeners = chartDataSetsListeners;
         } else if (rendererDataSetsListeners.containsKey(renderer)) {

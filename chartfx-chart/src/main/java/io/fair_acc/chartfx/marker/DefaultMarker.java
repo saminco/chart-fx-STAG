@@ -6,7 +6,18 @@ import javafx.scene.canvas.GraphicsContext;
  * @author rstein
  */
 public enum DefaultMarker implements Marker {
-    RECTANGLE, RECTANGLE1, RECTANGLE2, CIRCLE, CIRCLE1, CIRCLE2, PLUS, CROSS, DIAMOND, DIAMOND1, DIAMOND2;
+    RECTANGLE,
+    RECTANGLE1,
+    RECTANGLE2,
+    CIRCLE,
+    CIRCLE1,
+    CIRCLE2,
+    PLUS,
+    CROSS,
+    DIAMOND,
+    DIAMOND1,
+    DIAMOND2;
+    public static final DefaultMarker DEFAULT = RECTANGLE;
 
     @Override
     public void draw(final GraphicsContext gc, final double x, final double y, final double size) {

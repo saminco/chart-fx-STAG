@@ -1,5 +1,9 @@
 package io.fair_acc.math;
 
+import java.util.Arrays;
+import java.util.function.IntFunction;
+import java.util.function.ToIntFunction;
+
 import io.fair_acc.dataset.utils.AssertUtils;
 
 /**
@@ -342,5 +346,100 @@ public final class ArrayUtils {
         AssertUtils.notNull(ARRAY, array);
         final int len = array.length;
         ArrayUtils.fillArray(array, 0, len, value);
+    }
+
+    /**
+     * @param array current value
+     * @param minSize minimum size
+     * @return a new array if the existing one is not large enough
+     */
+    public static boolean[] resizeMin(boolean[] array, int minSize) {
+        if (array != null && array.length >= minSize) {
+            return array;
+        }
+        return new boolean[growSize(minSize, array, arr -> arr.length)];
+    }
+
+    /**
+     * @param array current value
+     * @param minSize minimum size
+     * @return a new array if the existing one is not large enough
+     */
+    public static double[] resizeMin(double[] array, int minSize) {
+        if (array != null && array.length >= minSize) {
+            return array;
+        }
+        return new double[growSize(minSize, array, arr -> arr.length)];
+    }
+
+    public static double[] resizeMin(double[] array, int minSize, boolean copyValues) {
+        if (array != null && array.length >= minSize) {
+            return array;
+        }
+        final int newSize = growSize(minSize, array, arr -> arr.length);
+        if (!copyValues || array == null) {
+            return new double[newSize];
+        }
+        return Arrays.copyOfRange(array, 0, newSize);
+    }
+
+    public static int[] resizeMin(int[] array, int minSize) {
+        if (array != null && array.length >= minSize) {
+            return array;
+        }
+        return new int[growSize(minSize, array, arr -> arr.length)];
+    }
+
+    /**
+     * @param array current value
+     * @param minSize minimum size
+     * @return a new array if the existing one is not large enough
+     */
+    public static <T> T[] resizeMinNulled(T[] array, int minSize, IntFunction<T[]> constructor) {
+        return resizeMin(array, minSize, constructor, true);
+    }
+
+    public static <T> T[] resizeMin(T[] array, int minSize, IntFunction<T[]> constructor, boolean setNull) {
+        if (array != null && array.length >= minSize) {
+            if (setNull) {
+                Arrays.fill(array, 0, minSize, null);
+            }
+            return array;
+        }
+        return constructor.apply(growSize(minSize, array, arr -> arr.length));
+    }
+
+    private static <T> int growSize(int minSize, T object, ToIntFunction<T> getSize) {
+        // grow by at least some elements or a percentage to avoid pressure from small increases
+        int currentSize = object == null ? 0 : getSize.applyAsInt(object);
+        int minGrowSize = Math.max(currentSize + 200, (int) (currentSize * 1.2));
+        return Math.max(minSize, minGrowSize);
+    }
+
+    /**
+     * @param array existing array
+     * @param maxSize max size
+     * @return existing array or null if it is larger than the max size
+     */
+    public static boolean[] clearIfLarger(boolean[] array, int maxSize) {
+        return array != null && array.length > maxSize ? null : array;
+    }
+
+    /**
+     * @param array existing array
+     * @param maxSize max size
+     * @return existing array or null if it is larger than the max size
+     */
+    public static double[] clearIfLarger(double[] array, int maxSize) {
+        return array != null && array.length > maxSize ? null : array;
+    }
+
+    /**
+     * @param array existing array
+     * @param maxSize max size
+     * @return existing array or null if it is larger than the max size
+     */
+    public static <T> T[] clearIfLarger(T[] array, int maxSize) {
+        return array != null && array.length > maxSize ? null : array;
     }
 }

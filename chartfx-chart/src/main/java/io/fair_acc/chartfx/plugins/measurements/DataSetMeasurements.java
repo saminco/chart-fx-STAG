@@ -7,27 +7,19 @@ import static io.fair_acc.chartfx.plugins.measurements.DataSetMeasurements.Measu
 import static io.fair_acc.chartfx.plugins.measurements.DataSetMeasurements.MeasurementCategory.MATH;
 import static io.fair_acc.chartfx.plugins.measurements.DataSetMeasurements.MeasurementCategory.MATH_FUNCTION;
 import static io.fair_acc.chartfx.plugins.measurements.DataSetMeasurements.MeasurementCategory.PROJECTION;
-import static io.fair_acc.chartfx.plugins.measurements.DataSetMeasurements.MeasurementCategory.TRENDING;
 
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ChangeListener;
-import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
@@ -43,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import io.fair_acc.chartfx.Chart;
 import io.fair_acc.chartfx.XYChart;
 import io.fair_acc.chartfx.axes.spi.DefaultNumericAxis;
-import io.fair_acc.chartfx.axes.spi.format.DefaultTimeFormatter;
 import io.fair_acc.chartfx.plugins.DataPointTooltip;
 import io.fair_acc.chartfx.plugins.EditAxis;
 import io.fair_acc.chartfx.plugins.ParameterMeasurements;
@@ -59,24 +50,18 @@ import io.fair_acc.chartfx.utils.DragResizerUtil;
 import io.fair_acc.chartfx.utils.FXUtils;
 import io.fair_acc.dataset.DataSet;
 import io.fair_acc.dataset.GridDataSet;
-import io.fair_acc.dataset.event.EventListener;
-import io.fair_acc.dataset.event.EventRateLimiter.UpdateStrategy;
-import io.fair_acc.dataset.event.UpdateEvent;
-import io.fair_acc.dataset.spi.LimitedIndexedTreeDataSet;
+import io.fair_acc.dataset.events.StateListener;
 import io.fair_acc.dataset.utils.ProcessingProfiler;
 import io.fair_acc.math.DataSetMath;
 import io.fair_acc.math.DataSetMath.Filter;
 import io.fair_acc.math.DataSetMath.MathOp;
 import io.fair_acc.math.MathDataSet;
-import io.fair_acc.math.MathDataSet.DataSetsFunction;
 import io.fair_acc.math.MultiDimDataSetMath;
 
 public class DataSetMeasurements extends AbstractChartMeasurement {
     private static final Logger LOGGER = LoggerFactory.getLogger(DataSetMeasurements.class);
     private static final long MIN_FFT_BINS = 4;
     private static final long DEFAULT_UPDATE_RATE_LIMIT = 40;
-    private static final int DEFAULT_BUFFER_CAPACITY = 10_000;
-    private static final double DEFAULT_BUFFER_LENGTH = 3600e3; // 1h in Milliseconds
     private static final String FILTER_CONSTANT_VARIABLE = "filter constant";
     private static final String FREQUENCY = "frequency";
     private static final String MAG = "magnitude(";
@@ -92,13 +77,9 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
     private final DefaultNumericAxis xAxis = new DefaultNumericAxis("xAxis");
     private final DefaultNumericAxis yAxis = new DefaultNumericAxis("yAxis");
     private final ErrorDataSetRenderer renderer = new ErrorDataSetRenderer();
-    private final DataSetsFunction dataSetFunction = this::transform;
     private ExternalStage externalStage;
-    protected final boolean isTrending;
-    protected final LimitedIndexedTreeDataSet trendingDataSet;
     private final MathDataSet mathDataSet;
 
-    protected final ChangeListener<? super Number> delayedUpdateListener = (obs, o, n) -> delayedUpdate();
     protected final ChangeListener<Chart> localChartChangeListener = (obs, o, n) -> {
         if (o != null) {
             o.getRenderers().remove(renderer);
@@ -122,54 +103,21 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
             yAxis.forceRedraw();
         }
     };
-    protected final ListChangeListener<? super AbstractChartMeasurement> trendingListener = change -> {
-        while (change.next()) {
-            change.getRemoved().forEach(meas -> meas.valueProperty().removeListener(delayedUpdateListener));
-            change.getAddedSubList().forEach(meas -> meas.valueProperty().addListener(delayedUpdateListener));
-        }
-    };
 
     public DataSetMeasurements(final ParameterMeasurements plugin, final MeasurementType measType) { // NOPMD
-        super(plugin, measType.toString(), measType.isVertical ? X : Y, measType.getRequiredSelectors(),
-                MeasurementCategory.TRENDING.equals(measType.getCategory()) ? 0 : measType.getRequiredDataSets());
+        super(plugin, measType.toString(), measType.isVertical ? X : Y, measType.getRequiredSelectors(), measType.getRequiredDataSets());
         this.measType = measType;
 
-        isTrending = MeasurementCategory.TRENDING.equals(measType.getCategory());
-        measurementSelector = new ChartMeasurementSelector(plugin, this, isTrending ? measType.getRequiredDataSets() : 0);
-        if (isTrending) {
-            trendingDataSet = new LimitedIndexedTreeDataSet("uninitialised", DEFAULT_BUFFER_CAPACITY, DEFAULT_BUFFER_LENGTH);
+        measurementSelector = new ChartMeasurementSelector(plugin, this, 0);
+        mathDataSet = new MathDataSet(measType.getName(), this::transform, DEFAULT_UPDATE_RATE_LIMIT);
 
-            lastLayoutRow = shiftGridPaneRowOffset(measurementSelector.getChildren(), lastLayoutRow);
-            gridPane.getChildren().addAll(measurementSelector.getChildren());
-
-            switch (measType) {
-            case TRENDING_SECONDS:
-                trendingDataSet.setSubtractOffset(true);
-                break;
-            case TRENDING_TIMEOFDAY_UTC:
-                xAxis.setTimeAxis(true);
-                break;
-            case TRENDING_TIMEOFDAY_LOCAL:
-                xAxis.setTimeAxis(true);
-                final DefaultTimeFormatter axisFormatter = (DefaultTimeFormatter) xAxis.getAxisLabelFormatter();
-                axisFormatter.setTimeZoneOffset(OffsetDateTime.now().getOffset());
-                break;
-            default:
-                break;
-            }
-        } else {
-            trendingDataSet = null;
-        }
-
-        mathDataSet = new MathDataSet(measType.getName(), dataSetFunction, DEFAULT_UPDATE_RATE_LIMIT, UpdateStrategy.INSTANTANEOUS_RATE);
         xAxis.setAutoRanging(true);
-        xAxis.setAutoUnitScaling(!isTrending);
+        xAxis.setAutoUnitScaling(true);
 
         yAxis.setAutoRanging(true);
         yAxis.setAutoUnitScaling(true);
         renderer.getAxes().addAll(xAxis, yAxis);
-        renderer.setDrawChartDataSets(false);
-        renderer.getDatasets().add(isTrending ? trendingDataSet : mathDataSet);
+        renderer.getDatasets().add(mathDataSet);
 
         localChart.addListener(localChartChangeListener);
         getMeasurementPlugin().chartProperty().addListener(globalChartChangeListener);
@@ -206,43 +154,19 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         return graphDetached;
     }
 
-    @Override
-    public void handle(final UpdateEvent event) {
+    public void handle() {
         if (getValueIndicatorsUser().size() < measType.requiredSelectors) {
             // not yet initialised
             return;
         }
 
+        final String dataSetsNames;
+
         final List<DataSet> dataSets = mathDataSet.getSourceDataSets();
-        final String dataSetsNames = dataSets.isEmpty() ? "(null)" : dataSets.stream().map(DataSet::getName).collect(Collectors.joining(", ", "(", ")"));
+        dataSetsNames = dataSets.isEmpty() ? "(null)" : dataSets.stream().map(DataSet::getName).collect(Collectors.joining(", ", "(", ")"));
 
-        final long start = System.nanoTime();
-
-        if (isTrending) {
-            // update with parameter measurement
-            final ObservableList<AbstractChartMeasurement> measurements = measurementSelector.getSelectedChartMeasurements();
-            if (!measurements.isEmpty()) {
-                final AbstractChartMeasurement firstMeasurement = measurements.get(0);
-                final ArrayList<DataSet> list = new ArrayList<>();
-                list.add(firstMeasurement.getDataSet());
-                transform(list, mathDataSet);
-            }
-        } else {
-            // force MathDataSet update
-            transform(mathDataSet.getSourceDataSets(), mathDataSet);
-        }
-
-        final long now = System.nanoTime();
-        final double val = TimeUnit.NANOSECONDS.toMillis(now - start);
-        ProcessingProfiler.getTimeDiff(start, "computation duration of " + measType + " for dataSet" + dataSetsNames);
-
-        FXUtils.runFX(() -> getValueField().setUnit("ms"));
-        FXUtils.runFX(() -> getValueField().setValue(val));
-
-        if (event != null) {
-            // republish updateEvent
-            invokeListener(event);
-        }
+        // force MathDataSet update
+        mathDataSet.triggerUpdate();
     }
 
     @Override
@@ -260,22 +184,12 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         dataSetSelector.setDisable(true);
         measurementSelector.setDisable(true);
 
-        if (isTrending) {
-            final int sourceSize = measurementSelector.getSelectedChartMeasurements().size();
-            if (sourceSize < measType.getRequiredDataSets()) {
-                if (LOGGER.isWarnEnabled()) {
-                    LOGGER.atWarn().addArgument(measType).addArgument(sourceSize).addArgument(measType.getRequiredDataSets()).log("insuffcient number ChartMeasurements for {} selected {} vs. needed {}");
-                }
-                removeAction();
+        final int sourceSize = mathDataSet.getSourceDataSets().size();
+        if (mathDataSet.getSourceDataSets().size() < measType.getRequiredDataSets()) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.atWarn().addArgument(measType).addArgument(sourceSize).addArgument(measType.getRequiredDataSets()).log("insuffcient number DataSets for {} selected {} vs. needed {}");
             }
-        } else {
-            final int sourceSize = mathDataSet.getSourceDataSets().size();
-            if (mathDataSet.getSourceDataSets().size() < measType.getRequiredDataSets()) {
-                if (LOGGER.isWarnEnabled()) {
-                    LOGGER.atWarn().addArgument(measType).addArgument(sourceSize).addArgument(measType.getRequiredDataSets()).log("insuffcient number DataSets for {} selected {} vs. needed {}");
-                }
-                removeAction();
-            }
+            removeAction();
         }
     }
 
@@ -300,7 +214,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         if (chart != null) {
             chart.getRenderers().remove(renderer);
             chart.getAxes().removeAll(renderer.getAxes());
-            chart.requestLayout();
+            chart.invalidate();
         }
     }
 
@@ -345,21 +259,6 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
             this.parameterFields.add(parameterField);
             this.getDialogContentBox().getChildren().addAll(label, parameterField);
         }
-        switch (measType) {
-        case TRENDING_SECONDS:
-        case TRENDING_TIMEOFDAY_UTC:
-        case TRENDING_TIMEOFDAY_LOCAL:
-            parameterFields.get(0).setText("600.0");
-            parameterFields.get(1).setText("10000");
-            Button resetButton = new Button("reset history");
-            resetButton.setTooltip(new Tooltip("press to reset trending history"));
-            resetButton.setOnAction(evt -> this.trendingDataSet.reset());
-            GridPane.setConstraints(resetButton, 1, lastLayoutRow++);
-            this.getDialogContentBox().getChildren().addAll(resetButton);
-            break;
-        default:
-            break;
-        }
     }
 
     @Override
@@ -380,16 +279,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
             yAxis.setSide(Side.RIGHT);
             localChart.set(getMeasurementPlugin().getChart());
         }
-        delayedUpdate();
-    }
-
-    protected void delayedUpdate() {
-        new Timer(DataSetMeasurements.class.toString(), true).schedule(new TimerTask() {
-            @Override
-            public void run() {
-                handle(null);
-            }
-        }, 0);
+        mathDataSet.triggerUpdate();
     }
 
     protected String getDataSetsAsStringList(final List<DataSet> list) {
@@ -401,28 +291,16 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
     }
 
     protected void initDataSets() {
-        if (isTrending) {
-            final ObservableList<AbstractChartMeasurement> measurements = measurementSelector.getSelectedChartMeasurements();
-            final String measurementName = "measurement";
-            trendingDataSet.setName(measType.getName() + measurementName);
-            measurements.removeListener(trendingListener);
-            measurements.addListener(trendingListener);
-            if (!measurements.isEmpty()) {
-                // add listener in case they haven't been already initialised
-                measurements.get(0).valueProperty().removeListener(delayedUpdateListener);
-                measurements.get(0).valueProperty().addListener(delayedUpdateListener);
-            }
-        } else {
-            final ObservableList<DataSet> dataSets = dataSetSelector.getSelectedDataSets();
-            final String dataSetsNames = dataSets.isEmpty() ? "(null)" : getDataSetsAsStringList(dataSets);
+        final ObservableList<DataSet> dataSets = dataSetSelector.getSelectedDataSets();
+        final String dataSetsNames = dataSets.isEmpty() ? "(null)" : getDataSetsAsStringList(dataSets);
 
-            mathDataSet.setName(measType.getName() + dataSetsNames);
+        mathDataSet.setName(measType.getName() + dataSetsNames);
 
-            mathDataSet.deregisterListener();
-            mathDataSet.getSourceDataSets().clear();
-            mathDataSet.getSourceDataSets().addAll(dataSets);
-            mathDataSet.registerListener();
-        }
+        mathDataSet.deregisterListener();
+        mathDataSet.getSourceDataSets().clear();
+        mathDataSet.getSourceDataSets().addAll(dataSets);
+        mathDataSet.registerListener();
+        mathDataSet.triggerUpdate();
     }
 
     @Override
@@ -432,8 +310,6 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         initDataSets();
         xAxis.setSide(Side.TOP);
         yAxis.setSide(Side.RIGHT);
-        xAxis.invalidateCaches();
-        yAxis.invalidateCaches();
 
         if (graphDetached.get() && externalStage != null && externalStage.getOnCloseRequest() != null) {
             externalStage.getOnCloseRequest().handle(new WindowEvent(externalStage, WindowEvent.WINDOW_CLOSE_REQUEST));
@@ -444,7 +320,9 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         }
         graphDetached.set(false);
 
-        delayedUpdate();
+        if (mathDataSet != null) {
+            mathDataSet.triggerUpdate();
+        }
     }
 
     @Override
@@ -454,6 +332,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
     }
 
     protected void transform(final List<DataSet> inputDataSets, final MathDataSet outputDataSet) { // NOPMD - long function by necessity/functionality
+        final long start = System.nanoTime();
         if ((inputDataSets.isEmpty() || inputDataSets.get(0) == null || inputDataSets.get(0).getDataCount() < 4)) {
             outputDataSet.clearMetaInfo();
             outputDataSet.clearData();
@@ -539,7 +418,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
             // math functions
             case SQUARE:
                 FXUtils.runFX(() -> yAxis.set("(" + name1 + ")²", yAxisUnit));
-                outputDataSet.set(DataSetMath.sqrFunction(firstDataSet, 0.0));
+                Platform.runLater(() -> outputDataSet.set(DataSetMath.sqrFunction(firstDataSet, 0.0))); // runLater needed because the dataset is locked at that moment...
                 break;
             case SQUARE_FULL:
                 FXUtils.runFX(() -> yAxis.set("(" + name1 + ", " + name2 + ")²", yAxisUnit));
@@ -751,34 +630,17 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
                 FXUtils.runFX(() -> yAxis.set(MAG + name1 + " + " + name2 + ")", "log10"));
                 outputDataSet.set(DataSetMath.log10Function(firstDataSet, secondDataSet));
                 break;
-
-                // Trending
-
-            case TRENDING_SECONDS:
-            case TRENDING_TIMEOFDAY_UTC:
-            case TRENDING_TIMEOFDAY_LOCAL:
-                final double now = System.currentTimeMillis() / 1000.0;
-                final double lengthTime = parameterFields.isEmpty() ? 1.0 : Math.max(1.0, parameterFields.get(0).getValue());
-                final int lengthSamples = parameterFields.isEmpty() ? 1 : (int) Math.max(1.0, parameterFields.get(1).getValue());
-                if (trendingDataSet.getMaxQueueSize() != lengthSamples) {
-                    trendingDataSet.setMaxQueueSize(lengthSamples);
-                }
-                if (trendingDataSet.getMaxLength() != lengthTime) {
-                    trendingDataSet.setMaxLength(lengthTime);
-                }
-
-                FXUtils.runFX(() -> xAxis.set("time-of-day", (String) null));
-                FXUtils.runFX(() -> yAxis.set(yAxisName, yAxisUnit));
-
-                final AbstractChartMeasurement measurement = measurementSelector.getSelectedChartMeasurement();
-                if (measurement != null) {
-                    trendingDataSet.setName(measurement.getTitle());
-                    trendingDataSet.add(now, measurement.valueProperty().get());
-                }
-                break;
             default:
                 break;
             }
+        });
+        final long now = System.nanoTime();
+        final double val = TimeUnit.NANOSECONDS.toMillis(now - start);
+        ProcessingProfiler.getTimeDiff(start, "computation duration of " + measType + " for dataSet" + outputDataSet.getName());
+
+        FXUtils.runFX(() -> {
+            getValueField().setUnit("ms");
+            getValueField().setValue(val);
         });
     }
 
@@ -787,8 +649,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         MATH_FUNCTION("Math - Functions"),
         FILTER("DataSet Filtering"),
         PROJECTION("DataSet Projections"),
-        FOURIER("Spectral Transforms"),
-        TRENDING("Trending");
+        FOURIER("Spectral Transforms");
 
         private final String name;
 
@@ -861,12 +722,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
         CONVERT2_TO_DB(true, FOURIER, "convert sum of DataSets to dB", 0, 2),
         CONVERT_FROM_DB(true, FOURIER, "convert DataSet from dB", 0, 1),
         CONVERT_TO_LOG10(true, FOURIER, "convert DataSet to log10", 0, 1),
-        CONVERT2_TO_LOG10(true, FOURIER, "convert sum of DataSets to log10", 0, 2),
-
-        // Trending
-        TRENDING_SECONDS(true, TRENDING, "trend in seconds", 0, 1, "length history [s]", "n data points []"),
-        TRENDING_TIMEOFDAY_UTC(true, TRENDING, "time-of-day trending [UTC]", 0, 1, "length history [s]", "n data points []"),
-        TRENDING_TIMEOFDAY_LOCAL(true, TRENDING, "time-of-day trending [local]", 0, 1, "length history [s]", "n data points []");
+        CONVERT2_TO_LOG10(true, FOURIER, "convert sum of DataSets to log10", 0, 2);
 
         private final String name;
         private final MeasurementCategory category;
@@ -917,7 +773,7 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
     }
 
     protected class ExternalStage extends Stage {
-        private final EventListener titleListener = evt -> FXUtils.runFX(() -> setTitle(mathDataSet.getName()));
+        private final StateListener titleListener = (source, bits) -> FXUtils.runFX(() -> setTitle(mathDataSet.getName()));
 
         public ExternalStage() {
             super();
@@ -937,26 +793,20 @@ public class DataSetMeasurements extends AbstractChartMeasurement {
             chart.getPlugins().add(new TableViewer());
 
             final Scene scene = new Scene(chart, 640, 480);
-            renderer.getDatasets().get(0).addListener(titleListener);
+            // TODO: renderer.getDatasets().get(0).addListener(titleListener);
             setScene(scene);
             FXUtils.runFX(this::show);
 
             FXUtils.runFX(() -> {
                 localChart.set(chart);
-                xAxis.invalidateCaches();
-                yAxis.invalidateCaches();
-                xAxis.applyCss();
-                yAxis.applyCss();
                 xAxis.setSide(Side.BOTTOM);
                 yAxis.setSide(Side.LEFT);
             });
 
             setOnCloseRequest(evt -> {
-                chart.getRenderers().remove(renderer);
+                // TODO: chart.getRenderers().remove(renderer);
                 chart.getAxes().clear();
-                renderer.getDatasets().get(0).removeListener(titleListener);
-                xAxis.invalidateCaches();
-                yAxis.invalidateCaches();
+                // TODO: renderer.getDatasets().get(0).removeListener(titleListener);
                 xAxis.setSide(Side.TOP);
                 yAxis.setSide(Side.RIGHT);
                 graphDetached.set(false);

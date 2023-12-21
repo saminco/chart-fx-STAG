@@ -12,7 +12,7 @@
     <artifactId>math</artifactId>
     <name>chartfx_math</name>
     <properties>
-        <project.moduleName>io.fair-acc.math</project.moduleName>
+        <project.moduleName>io.fair_acc.math</project.moduleName>
     </properties>
 
     <description>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>net.jafama</groupId>
             <artifactId>jafama</artifactId>
-            <version>2.3.1</version>
+            <version>2.3.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

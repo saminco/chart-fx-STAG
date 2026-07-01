@@ -456,7 +456,7 @@ public class EditDataSet extends TableViewer {
     }
 
     @Override
-    protected HBox getInteractorBar() {
+    public HBox getInteractorBar() {
         final HBox interactorBar = super.getInteractorBar();
 
         final FontIcon editIcon = new FontIcon("fa-edit:" + FONT_SIZE);

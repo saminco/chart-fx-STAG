@@ -30,8 +30,8 @@
     </modules>
 
     <properties>
-        <revision>master</revision>
-        <changelist>-SNAPSHOT</changelist>
+        <revision>11.3.1</revision>
+        <changelist>.stag</changelist>
         <sha1 />
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.moduleName>io.fair_acc.chartfx_parent</project.moduleName>
@@ -220,18 +220,6 @@
                         <phase>clean</phase>
                         <goals>
                             <goal>clean</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar-no-fork</goal>
                         </goals>
                     </execution>
                 </executions>

@@ -35,12 +35,11 @@
         <sha1 />
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.moduleName>io.fair_acc.chartfx_parent</project.moduleName>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
 
         <!-- starting with javafx 17, the chart will not be garbage collected as soon as a plugin is present -->
-        <chartfx.javafx.version>16</chartfx.javafx.version>
-        <chartfx.controlsfx.version>11.1.2</chartfx.controlsfx.version>
+        <chartfx.javafx.version>21.0.2</chartfx.javafx.version>
+        <chartfx.controlsfx.version>11.2.2</chartfx.controlsfx.version>
         <chartfx.ikonli.version>12.3.1</chartfx.ikonli.version>
         <chartfx.javafxsvg.version>1.3.0</chartfx.javafxsvg.version>
         <version.commons-lang3>3.13.0</version.commons-lang3>
@@ -48,8 +47,8 @@
         <chartfx.slf4j.version>2.0.9</chartfx.slf4j.version>
         <chartfx.junit.jupiter.version>5.10.0</chartfx.junit.jupiter.version>
         <chartfx.awaitility.version>4.2.0</chartfx.awaitility.version>
-        <chartfx.jacoco.version>0.8.8</chartfx.jacoco.version>
-        <chartfx.surefire.version>3.0.0-M9</chartfx.surefire.version>
+        <chartfx.jacoco.version>0.8.12</chartfx.jacoco.version>
+        <chartfx.surefire.version>3.2.5</chartfx.surefire.version>
 
         <version.jetbrains.annotations>24.0.1</version.jetbrains.annotations>
         <version.maven-gpg-plugin>3.0.1</version.maven-gpg-plugin>
@@ -153,7 +152,7 @@
                     <version>3.0.1</version> <!-- use old version to ignore module system errors -->
                     <configuration>
                         <links>
-                            <link>https://openjfx.io/javadoc/12/</link>
+                            <link>https://openjfx.io/javadoc/21/</link>
                         </links>
                         <doclint>none</doclint> <!-- TODO: fix javadoc errors -->
                     </configuration>
@@ -242,7 +241,7 @@
                 <version>${chartfx.surefire.version}</version>
                 <configuration>
                     <!-- Jacoco prepare-agent builds some command-line params without which jacoco will not instrument. Hence it is important to add those command-line params here (${argLine} holds those params) -->
-                    <argLine>${argLine} -Duser.language=en -Duser.country=US -Xms256m -Xmx4096m -XX:G1HeapRegionSize=32m -Djava.awt.headless=true -Dtestfx.robot=glass -Dtestfx.headless=true -Dprism.order=sw</argLine>
+                    <argLine>${argLine} -Duser.language=en -Duser.country=US -Xms256m -Xmx4096m -XX:G1HeapRegionSize=32m -Dtestfx.robot=glass -Dprism.order=sw</argLine>
                     <forkCount>1</forkCount>
                     <rerunFailingTestsCount>3</rerunFailingTestsCount>
                     <runOrder>random</runOrder>

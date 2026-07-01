@@ -68,13 +68,13 @@ public class TableViewer extends ChartPlugin {
     /* default */ static final String BUTTON_BAR_STYLE_CLASS = "table-viewer-button-bar";
 
     protected static final int MIN_REFRESH_RATE_WARN = 20; // [ms] warn if refresh rate is set lower than this value
-    private final FontIcon tableView = new FontIcon("fa-table:" + FONT_SIZE);
-    private final FontIcon graphView = new FontIcon("fa-line-chart:" + FONT_SIZE);
-    private final FontIcon saveIcon = new FontIcon("fa-save:" + FONT_SIZE);
-    private final FontIcon clipBoardIcon = new FontIcon("far-clipboard:" + FONT_SIZE);
+    private final FontIcon tableView = new FontIcon("fa-table:" + FONT_SIZE + ":WHITE");
+    private final FontIcon graphView = new FontIcon("fa-line-chart:" + FONT_SIZE + ":WHITE");
+    private final FontIcon saveIcon = new FontIcon("fa-save:" + FONT_SIZE + ":WHITE");
+    private final FontIcon clipBoardIcon = new FontIcon("far-clipboard:" + FONT_SIZE + ":WHITE");
     private final HBox interactorButtons = getInteractorBar();
     private final TableView<DataSetsRow> table = new TableView<>();
-    private final DataSetsModel dsModel = new DataSetsModel();
+    protected final DataSetsModel dsModel = new DataSetsModel();
     protected boolean editable;
     private final Timer timer = new Timer("TableViewer-update-task", true);
     private final IntegerProperty refreshRate = new SimpleIntegerProperty(this, "refreshRate", 1000) {
@@ -191,7 +191,7 @@ public class TableViewer extends ChartPlugin {
      *
      * @return HBox node with the toolbar elements
      */
-    protected HBox getInteractorBar() {
+    public HBox getInteractorBar() {
         final Separator separator = new Separator();
         separator.setOrientation(Orientation.VERTICAL);
         final HBox buttonBar = new HBox();
@@ -246,12 +246,8 @@ public class TableViewer extends ChartPlugin {
     }
 
     protected enum ColumnType {
-        X(DIM_X, "x", false, true),
-        Y(DIM_Y, "y", false, true),
-        EXN(DIM_X, "e_x", true, false),
-        EXP(DIM_X, "e_x", true, true),
-        EYN(DIM_Y, "e_y", true, false),
-        EYP(DIM_Y, "e_y", true, true);
+        X(DIM_X, "Time", false, true),
+        Y(DIM_Y, "Value", false, true);
 
         final int dimIdx;
         final String label;

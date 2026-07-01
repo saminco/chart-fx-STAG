@@ -6,6 +6,16 @@
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=fair-acc_chart-fx&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=fair-acc_chart-fx)
 [![Coverity Build Status](https://scan.coverity.com/projects/chart-fx/badge.svg)](https://scan.coverity.com/projects/chart-fx)
 
+## STAG
+
+This branch carries the STAG-specific changes on top of upstream ChartFx 11.3.1. Build and install the local STAG artifacts with:
+
+```sh
+git clone -b stag-11.3.1-migration https://github.com/saminco/chart-fx-STAG.git
+cd chart-fx-STAG
+mvn clean package install -DskipTests
+```
+
 <p align="center" width="100%">
     <img t src="docs/banner/banner.svg" alt="ChartFx banner">
 </p>

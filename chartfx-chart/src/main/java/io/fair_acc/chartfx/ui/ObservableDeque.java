@@ -280,4 +280,9 @@ public class ObservableDeque<E> extends ObservableListBase<E> implements Deque<E
     public Iterator<E> descendingIterator() {
         return deque.descendingIterator();
     }
+
+    @Override
+    public ObservableDeque<E> reversed() {
+        return new ObservableDeque<>(deque.reversed());
+    }
 }
